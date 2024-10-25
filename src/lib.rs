@@ -19,7 +19,7 @@ use solana_program_runtime::loaded_programs::ProgramCacheEntry;
 use solana_program_runtime::loaded_programs::ProgramCacheForTxBatch;
 use solana_program_runtime::loaded_programs::ProgramRuntimeEnvironments;
 use solana_program_runtime::sysvar_cache::SysvarCache;
-use solana_sdk::account::{Account, AccountSharedData, ReadableAccount};
+use solana_sdk::account::{Account, AccountSharedData, ReadableAccount, WritableAccount};
 use solana_sdk::clock::Clock;
 use solana_sdk::epoch_schedule::EpochSchedule;
 use solana_sdk::feature_set::*;
@@ -616,7 +616,16 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     input
         .accounts
         .iter()
-        .map(|(pubkey, account)| (*pubkey, AccountSharedData::from(account.clone())))
+        .map(|(pubkey, account)| {
+            if *pubkey == input.instruction.program_id {
+                let mut stubbed_out_program_account = AccountSharedData::default();
+                stubbed_out_program_account.set_owner(solana_sdk::bpf_loader_upgradeable::id());
+                stubbed_out_program_account.set_executable(true);
+                (*pubkey, stubbed_out_program_account)
+            } else {
+                (*pubkey, AccountSharedData::from(account.clone()))
+            }
+        })
         .for_each(|x| transaction_accounts.push(x));
 
     let program_idx = transaction_accounts
