@@ -520,7 +520,7 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
     ) {
         Ok(v) => v,
         Err(e) => {
-            let (status, instruction_error, custom_error, instruction_error_index) =
+            let (status, instruction_error, _custom_error, instruction_error_index) =
                 transaction_error_to_err_nums(&e);
             return Some(TxnResult {
                 executed: false,
@@ -531,7 +531,7 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
                 status,
                 instruction_error,
                 instruction_error_index,
-                custom_error,
+                custom_error: 0, // TODO: precompile error codes are not conformant, so we're ignoring custom error codes for now. This should be revisited in the future.
                 return_data: vec![],
                 executed_units: 0,
                 fee_details: None,
