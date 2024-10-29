@@ -140,7 +140,7 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
             callbackback(&bincode::serialize(&Rent::default()).unwrap());
         }
         if *pubkey == last_restart_slot::id() {
-            let slot_val = 5000 as u64;
+            let slot_val = 5000_u64;
             callbackback(&bincode::serialize(&slot_val).unwrap());
         }
     });

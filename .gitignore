@@ -3,3 +3,5 @@
 test/self_test
 .vscode/
 *.so
+dump
+protosol
