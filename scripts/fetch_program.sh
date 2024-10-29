@@ -1,11 +1,12 @@
 #!/bin/bash
 
+: "${BPF_PROGRAMS_DIR:=bpf_programs}"
+
 if [ -z "$1" ]; then
     echo "Error: Program name argument is missing."
     exit 1
 fi
 
-BPF_PROGRAMS_DIR="bpf_programs"
 BPF_PROGRAMS_OUT_DIR="$BPF_PROGRAMS_DIR/lib"
 
 mkdir -p $BPF_PROGRAMS_DIR
