@@ -31,8 +31,8 @@ use solana_sdk::rent::Rent;
 use solana_sdk::rent_collector::RentCollector;
 use solana_sdk::stable_layout::stable_instruction::StableInstruction;
 use solana_sdk::stable_layout::stable_vec::StableVec;
-use solana_sdk::sysvar::SysvarId;
 use solana_sdk::sysvar::last_restart_slot;
+use solana_sdk::sysvar::SysvarId;
 use solana_sdk::transaction_context::{
     IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
 };

@@ -29,8 +29,11 @@ use solana_program_runtime::{
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction_context::{TransactionAccount, TransactionContext};
 use solana_sdk::{
-    account::AccountSharedData, clock::Clock, epoch_schedule::EpochSchedule, rent::Rent,
-    sysvar::{SysvarId,last_restart_slot},
+    account::AccountSharedData,
+    clock::Clock,
+    epoch_schedule::EpochSchedule,
+    rent::Rent,
+    sysvar::{last_restart_slot, SysvarId},
 };
 use std::{ffi::c_int, sync::Arc};
 
