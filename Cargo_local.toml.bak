@@ -42,7 +42,7 @@ solana-zk-sdk = { path = "../agave/zk-sdk" }
 solana-zk-elgamal-proof-program = { path = "../agave/programs/zk-elgamal-proof" }
 solana-poseidon = { path = "../agave/poseidon" }
 solfuzz-agave-macro = { path = "macro" }
-thiserror = "1.0.61"
+thiserror = "1.0.65"
 
 [build-dependencies]
 prost-build = "0.13.1"

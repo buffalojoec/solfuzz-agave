@@ -1,11 +1,9 @@
 use crate::proto::{self, ResultingState};
 use crate::proto::{AcctState, TransactionMessage, TxnContext, TxnResult};
 use prost::Message;
-use solana_accounts_db::accounts_db::{AccountShrinkThreshold, AccountsDbConfig};
+use solana_accounts_db::accounts_db::AccountsDbConfig;
 use solana_accounts_db::accounts_file::StorageAccess;
-use solana_accounts_db::accounts_index::{
-    AccountSecondaryIndexes, AccountsIndexConfig, IndexLimitMb,
-};
+use solana_accounts_db::accounts_index::{AccountsIndexConfig, IndexLimitMb};
 use solana_program::hash::Hash;
 use solana_program::instruction::CompiledInstruction;
 use solana_program::message::v0::MessageAddressTableLookup;
@@ -38,6 +36,7 @@ use solana_timings::ExecuteTimings;
 use std::cmp::max;
 use std::collections::HashSet;
 use std::ffi::c_int;
+use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -167,6 +166,29 @@ fn build_versioned_message(value: &TransactionMessage) -> Option<VersionedMessag
     }
 }
 
+/* Returns (txn_err, instr_err, custom_err, instr_err_idx) */
+fn transaction_error_to_err_nums(transaction_error: &TransactionError) -> (u32, u32, u32, u32) {
+    let (instr_err_no, custom_err_no, instr_err_idx) = match transaction_error.clone() {
+        TransactionError::InstructionError(instr_err_idx, instruction_error) => {
+            let instr_err_no = {
+                let serialized = bincode::serialize(&instruction_error).unwrap_or(vec![0, 0, 0, 0]);
+                u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1
+            };
+            let custom_err_no = match instruction_error {
+                InstructionError::Custom(custom_err_no) => custom_err_no,
+                _ => 0,
+            };
+            (instr_err_no, custom_err_no, instr_err_idx as u32)
+        }
+        _ => (0, 0, 0),
+    };
+    let txn_err_no = {
+        let serialized = bincode::serialize(&transaction_error).unwrap_or(vec![0, 0, 0, 0]);
+        u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1
+    };
+    (txn_err_no, instr_err_no, custom_err_no, instr_err_idx)
+}
+
 impl From<TransactionAccount> for proto::AcctState {
     fn from(value: TransactionAccount) -> AcctState {
         AcctState {
@@ -229,34 +251,13 @@ impl From<LoadAndExecuteTransactionsOutput> for TxnResult {
                     }
                     ProcessedTransaction::FeesOnly(_) => false,
                 };
-                let transaction_error = txn.status();
-                let (instr_err_idx, instruction_error) = match transaction_error.as_ref() {
-                    Err(TransactionError::InstructionError(instr_err_idx, instr_err)) => {
-                        (*instr_err_idx, Some(instr_err.clone()))
-                    }
-                    _ => (0, None),
-                };
-                let custom_error = match instruction_error {
-                    Some(InstructionError::Custom(custom_error)) => custom_error,
-                    _ => 0,
-                };
-
-                let status = match transaction_error {
-                    Ok(_) => 0,
-                    Err(transaction_error) => {
-                        let serialized =
-                            bincode::serialize(&transaction_error).unwrap_or(vec![0, 0, 0, 0]);
-                        u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1
-                    }
-                };
-                let instr_err_no = match instruction_error {
-                    Some(instruction_error) => {
-                        let serialized =
-                            bincode::serialize(&instruction_error).unwrap_or(vec![0, 0, 0, 0]);
-                        u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1
-                    }
-                    None => 0,
-                };
+                let (status, instr_err, custom_err, instr_err_idx) =
+                    match txn.status().as_ref().map_err(transaction_error_to_err_nums) {
+                        Ok(_) => (0, 0, 0, 0),
+                        Err((status, instr_err, custom_err, instr_err_idx)) => {
+                            (status, instr_err, custom_err, instr_err_idx)
+                        }
+                    };
                 let rent = match txn {
                     ProcessedTransaction::Executed(executed_tx) => {
                         executed_tx.loaded_transaction.rent
@@ -288,9 +289,9 @@ impl From<LoadAndExecuteTransactionsOutput> for TxnResult {
                     is_ok,
                     false,
                     status,
-                    instr_err_no,
+                    instr_err,
                     instr_err_idx,
-                    custom_error,
+                    custom_err,
                     executed_units,
                     return_data,
                     Some(txn.fee_details()),
@@ -299,29 +300,15 @@ impl From<LoadAndExecuteTransactionsOutput> for TxnResult {
                 )
             }
             Err(transaction_error) => {
-                let (instr_err_idx, instruction_error) = match transaction_error {
-                    TransactionError::InstructionError(instr_err_idx, instr_err) => {
-                        (*instr_err_idx, Some(instr_err.clone()))
-                    }
-                    _ => (0, None),
-                };
-                let instr_err_no = match instruction_error {
-                    Some(instruction_error) => {
-                        let serialized =
-                            bincode::serialize(&instruction_error).unwrap_or(vec![0, 0, 0, 0]);
-                        u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1
-                    }
-                    None => 0,
-                };
-                let serialized = bincode::serialize(transaction_error).unwrap_or(vec![0, 0, 0, 0]);
-                let status = u32::from_le_bytes(serialized[0..4].try_into().unwrap()) + 1;
+                let (status, instr_err, custom_err, instr_err_idx) =
+                    transaction_error_to_err_nums(transaction_error);
                 (
                     false,
                     true,
                     status,
-                    instr_err_no,
+                    instr_err,
                     instr_err_idx,
-                    0,
+                    custom_err,
                     0,
                     vec![],
                     None,
@@ -406,7 +393,7 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
     // Bank on slot 0
     let index = Some(AccountsIndexConfig {
         bins: Some(2),
-        flush_threads: Some(1),
+        num_flush_threads: Some(NonZeroUsize::new(1).unwrap()),
         index_limit_mb: IndexLimitMb::InMemOnly,
         ..AccountsIndexConfig::default()
     });
@@ -422,8 +409,6 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
         vec![],
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         accounts_db_config,
         None,
@@ -535,8 +520,8 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
     ) {
         Ok(v) => v,
         Err(e) => {
-            let err = bincode::serialize(&e).unwrap_or(vec![0, 0, 0, 0]);
-            let status = u32::from_le_bytes(err.try_into().unwrap()) + 1;
+            let (status, instruction_error, custom_error, instruction_error_index) =
+                transaction_error_to_err_nums(&e);
             return Some(TxnResult {
                 executed: false,
                 sanitization_error: true,
@@ -544,9 +529,9 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
                 rent: 0,
                 is_ok: false,
                 status,
-                instruction_error: 0,
-                instruction_error_index: 0,
-                custom_error: 0,
+                instruction_error,
+                instruction_error_index,
+                custom_error,
                 return_data: vec![],
                 executed_units: 0,
                 fee_details: None,
