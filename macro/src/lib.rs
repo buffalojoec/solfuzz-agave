@@ -57,10 +57,13 @@ pub fn load_core_bpf_program(_: TokenStream) -> TokenStream {
         );
 
         return quote! {
-            let program_id = Pubkey::new_from_array(#program_id_bytes);
+            // Load the program ID and ELF from environment inputs.
+            let target_program_id = Pubkey::new_from_array(#program_id_bytes);
             let elf = #elf_bytes;
+
+            // Replace the builtin in the cache with the loaded ELF.
             cache.replenish(
-                program_id,
+                target_program_id,
                 Arc::new(
                     solana_program_runtime::loaded_programs::ProgramCacheEntry::new(
                         &solana_sdk::bpf_loader_upgradeable::id(),
@@ -74,6 +77,9 @@ pub fn load_core_bpf_program(_: TokenStream) -> TokenStream {
                     .unwrap(),
                 ),
             );
+
+            // Remove the builtin ID from the `builtins` hash set.
+            builtins.remove(&target_program_id);
         }
         .into();
     }
