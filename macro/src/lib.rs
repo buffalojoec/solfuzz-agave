@@ -55,6 +55,7 @@ pub fn load_core_bpf_program(_: TokenStream) -> TokenStream {
             "    [SF_AGAVE]: Overriding builtin program with provided BPF target: {}",
             &program_id
         );
+        println!("    [SF_AGAVE]: ELF len: {}", elf_bytes.0.len());
 
         return quote! {
             let program_id = Pubkey::new_from_array(#program_id_bytes);

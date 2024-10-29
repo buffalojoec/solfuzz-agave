@@ -45,6 +45,9 @@ use solfuzz_agave_macro::load_core_bpf_program;
 use std::collections::HashSet;
 use std::env;
 use std::ffi::c_int;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -448,6 +451,16 @@ impl From<InstrEffects> for proto::InstrEffects {
     }
 }
 
+fn read_file(path: &Path) -> Vec<u8> {
+    let mut file = File::open(path)
+        .unwrap_or_else(|err| panic!("Failed to open \"{}\": {}", path.display(), err));
+
+    let mut file_data = Vec::new();
+    file.read_to_end(&mut file_data)
+        .unwrap_or_else(|err| panic!("Failed to read \"{}\": {}", path.display(), err));
+    file_data
+}
+
 pub fn execute_instr_proto(input: proto::InstrContext) -> Option<proto::InstrEffects> {
     let instr_context = match InstrContext::try_from(input) {
         Ok(context) => context,
@@ -498,14 +511,17 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
             solana_compute_budget_program::Entrypoint::vm,
         )),
     );
-    cache.replenish(
-        solana_config_program::id(),
-        Arc::new(ProgramCacheEntry::new_builtin(
-            0u64,
-            0usize,
-            solana_config_program::config_processor::Entrypoint::vm,
-        )),
-    );
+    #[cfg(not(feature = "core-bpf"))]
+    {
+        cache.replenish(
+            solana_config_program::id(),
+            Arc::new(ProgramCacheEntry::new_builtin(
+                0u64,
+                0usize,
+                solana_config_program::config_processor::Entrypoint::vm,
+            )),
+        );
+    }
     cache.replenish(
         solana_stake_program::id(),
         Arc::new(ProgramCacheEntry::new_builtin(
@@ -541,7 +557,30 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 
     // Will overwrite a builtin if environment variable `CORE_BPF_PROGRAM_ID`
     // is set to a valid program id.
-    load_core_bpf_program!();
+    // load_core_bpf_program!();
+
+    #[cfg(feature = "core-bpf")]
+    {
+        let program_id = solana_config_program::id();
+        let elf = read_file(Path::new(
+            "/home/sol/me/fuzzing/solana-conformance/bpf_programs/lib/solana_config_program.so",
+        ));
+        cache.replenish(
+            program_id,
+            Arc::new(
+                solana_program_runtime::loaded_programs::ProgramCacheEntry::new(
+                    &solana_sdk::bpf_loader_upgradeable::id(),
+                    cache.environments.program_runtime_v1.clone(),
+                    0,
+                    0,
+                    &elf,
+                    elf.len(),
+                    &mut solana_program_runtime::loaded_programs::LoadProgramMetrics::default(),
+                )
+                .unwrap(),
+            ),
+        );
+    }
 
     // Return builtins as a HashSet
     let mut builtins: HashSet<Pubkey> = HashSet::new();
@@ -550,7 +589,10 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
     builtins.insert(solana_sdk::bpf_loader::id());
     builtins.insert(solana_sdk::bpf_loader_upgradeable::id());
     builtins.insert(solana_sdk::compute_budget::id());
-    builtins.insert(solana_config_program::id());
+    #[cfg(not(feature = "core-bpf"))]
+    {
+        builtins.insert(solana_config_program::id());
+    }
     builtins.insert(solana_stake_program::id());
     builtins.insert(solana_system_program::id());
     builtins.insert(solana_vote_program::id());
@@ -559,9 +601,16 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
+    solana_logger::setup_with_default(
+        "solana_rbpf::vm=debug,\
+         solana_runtime::message_processor=debug,\
+         solana_runtime::system_instruction_processor=trace,\
+         solana_program_test=info",
+    );
+
     // TODO this shouldn't be default
     let compute_budget = ComputeBudget {
-        compute_unit_limit: input.cu_avail,
+        // compute_unit_limit: input.cu_avail,
         ..ComputeBudget::default()
     };
 
@@ -617,6 +666,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         .accounts
         .iter()
         .map(|(pubkey, account)| {
+            #[cfg(feature = "core-bpf")]
             if *pubkey == input.instruction.program_id {
                 let mut stubbed_out_program_account = AccountSharedData::default();
                 stubbed_out_program_account.set_owner(solana_sdk::bpf_loader_upgradeable::id());
@@ -625,6 +675,8 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             } else {
                 (*pubkey, AccountSharedData::from(account.clone()))
             }
+            #[cfg(not(feature = "core-bpf"))]
+            (*pubkey, AccountSharedData::from(account.clone()))
         })
         .for_each(|x| transaction_accounts.push(x));
 
@@ -642,15 +694,6 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     // sigh ... What is this mess?
     let mut program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
     program_cache_for_tx_batch.set_slot_for_tests(clock.slot);
-    let loaded_builtins = load_builtins(&mut program_cache_for_tx_batch);
-
-    // Skip if the program account is a native program and is not owned by the native loader
-    // (Would call the owner instead)
-    if loaded_builtins.contains(&transaction_accounts[program_idx].0)
-        && transaction_accounts[program_idx].1.owner() != &solana_sdk::native_loader::id()
-    {
-        return None;
-    }
 
     let program_runtime_environment_v1 =
         solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1(
@@ -667,6 +710,21 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     program_cache_for_tx_batch.environments = environments.clone();
     program_cache_for_tx_batch.upcoming_environments = Some(environments.clone());
 
+    #[cfg(feature = "core-bpf")]
+    load_builtins(&mut program_cache_for_tx_batch);
+    #[cfg(not(feature = "core-bpf"))]
+    {
+        let loaded_builtins = load_builtins(&mut program_cache_for_tx_batch);
+
+        // Skip if the program account is a native program and is not owned by the native loader
+        // (Would call the owner instead)
+        if loaded_builtins.contains(&transaction_accounts[program_idx].0)
+            && transaction_accounts[program_idx].1.owner() != &solana_sdk::native_loader::id()
+        {
+            return None;
+        }
+    }
+
     #[allow(deprecated)]
     let (blockhash, lamports_per_signature) = sysvar_cache
         .get_recent_blockhashes()
@@ -681,44 +739,44 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     input.rent_collector.epoch_schedule = (*epoch_schedule).clone();
     input.rent_collector.rent = (*rent_).clone();
 
-    let mut newly_loaded_programs = HashSet::<Pubkey>::new();
+    // let mut newly_loaded_programs = HashSet::<Pubkey>::new();
 
-    for acc in &input.accounts {
-        // FD rejects duplicate account loads
-        if !newly_loaded_programs.insert(acc.0) {
-            return None;
-        }
+    // for acc in &transaction_accounts {
+    //     // FD rejects duplicate account loads
+    //     if !newly_loaded_programs.insert(acc.0) {
+    //         return None;
+    //     }
 
-        if acc.1.executable && program_cache_for_tx_batch.find(&acc.0).is_none() {
-            // load_program_with_pubkey expects the owner to be one of the bpf loader
-            if !solana_sdk::loader_v4::check_id(&acc.1.owner)
-                && !solana_sdk::bpf_loader_deprecated::check_id(&acc.1.owner)
-                && !solana_sdk::bpf_loader::check_id(&acc.1.owner)
-                && !solana_sdk::bpf_loader_upgradeable::check_id(&acc.1.owner)
-            {
-                continue;
-            }
-            // https://github.com/anza-xyz/agave/blob/af6930da3a99fd0409d3accd9bbe449d82725bd6/svm/src/program_loader.rs#L124
-            /* pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph>(
-                callbacks: &CB,
-                program_cache: &ProgramCache<FG>,
-                pubkey: &Pubkey,
-                slot: Slot,
-                effective_epoch: Epoch,
-                epoch_schedule: &EpochSchedule,
-                reload: bool,
-            ) -> Option<Arc<ProgramCacheEntry>> { */
-            if let Some(loaded_program) = program_loader::load_program_with_pubkey(
-                &input,
-                &environments,
-                &acc.0,
-                clock.slot,
-                false,
-            ) {
-                program_cache_for_tx_batch.replenish(acc.0, loaded_program);
-            }
-        }
-    }
+    //     if acc.1.executable() && program_cache_for_tx_batch.find(&acc.0).is_none() {
+    //         // load_program_with_pubkey expects the owner to be one of the bpf loader
+    //         if !solana_sdk::loader_v4::check_id(&acc.1.owner())
+    //             && !solana_sdk::bpf_loader_deprecated::check_id(&acc.1.owner())
+    //             && !solana_sdk::bpf_loader::check_id(&acc.1.owner())
+    //             && !solana_sdk::bpf_loader_upgradeable::check_id(&acc.1.owner())
+    //         {
+    //             continue;
+    //         }
+    //         // https://github.com/anza-xyz/agave/blob/af6930da3a99fd0409d3accd9bbe449d82725bd6/svm/src/program_loader.rs#L124
+    //         /* pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph>(
+    //             callbacks: &CB,
+    //             program_cache: &ProgramCache<FG>,
+    //             pubkey: &Pubkey,
+    //             slot: Slot,
+    //             effective_epoch: Epoch,
+    //             epoch_schedule: &EpochSchedule,
+    //             reload: bool,
+    //         ) -> Option<Arc<ProgramCacheEntry>> { */
+    //         if let Some(loaded_program) = program_loader::load_program_with_pubkey(
+    //             &input,
+    //             &environments,
+    //             &acc.0,
+    //             clock.slot,
+    //             false,
+    //         ) {
+    //             program_cache_for_tx_batch.replenish(acc.0, loaded_program);
+    //         }
+    //     }
+    // }
 
     let log_collector = LogCollector::new_ref();
     let env_config = EnvironmentConfig::new(
@@ -807,6 +865,8 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         &mut timings,
     );
 
+    println!("RESULT: {:#?}", result);
+
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
@@ -821,9 +881,29 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             .unwrap()
             .into_iter()
             .enumerate()
-            .map(|(index, data)| (transaction_accounts[index].0, data.into()))
+            .map(|(index, data)| {
+                #[cfg(feature = "core-bpf")]
+                {
+                    // Hot-swap the provided program account back into the
+                    // returned list.
+                    if index == program_idx {
+                        if let Some(program_account) = input
+                            .accounts
+                            .iter()
+                            .find(|(pubkey, _)| *pubkey == input.instruction.program_id)
+                        {
+                            return (program_account.0, program_account.1.clone());
+                        }
+                    }
+                    (transaction_accounts[index].0, data.into())
+                }
+                #[cfg(not(feature = "core-bpf"))]
+                (transaction_accounts[index].0, data.into())
+            })
             .collect(),
-        cu_avail: input.cu_avail - compute_units_consumed,
+        cu_avail: input
+            .cu_avail
+            .saturating_sub(/* DEFAULT_COMPUTE_UNITS */ 450), // Stubbed.
         return_data,
     })
 }
