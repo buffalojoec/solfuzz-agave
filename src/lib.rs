@@ -31,8 +31,8 @@ use solana_sdk::rent::Rent;
 use solana_sdk::rent_collector::RentCollector;
 use solana_sdk::stable_layout::stable_instruction::StableInstruction;
 use solana_sdk::stable_layout::stable_vec::StableVec;
-use solana_sdk::sysvar::SysvarId;
 use solana_sdk::sysvar::last_restart_slot;
+use solana_sdk::sysvar::SysvarId;
 use solana_sdk::transaction_context::{
     IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
 };
@@ -638,15 +638,6 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     // sigh ... What is this mess?
     let mut program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
     program_cache_for_tx_batch.set_slot_for_tests(clock.slot);
-    let loaded_builtins = load_builtins(&mut program_cache_for_tx_batch);
-
-    // Skip if the program account is a native program and is not owned by the native loader
-    // (Would call the owner instead)
-    if loaded_builtins.contains(&transaction_accounts[program_idx].0)
-        && transaction_accounts[program_idx].1.owner() != &solana_sdk::native_loader::id()
-    {
-        return None;
-    }
 
     let program_runtime_environment_v1 =
         solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1(
@@ -662,6 +653,16 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     };
     program_cache_for_tx_batch.environments = environments.clone();
     program_cache_for_tx_batch.upcoming_environments = Some(environments.clone());
+
+    let loaded_builtins = load_builtins(&mut program_cache_for_tx_batch);
+
+    // Skip if the program account is a native program and is not owned by the native loader
+    // (Would call the owner instead)
+    if loaded_builtins.contains(&transaction_accounts[program_idx].0)
+        && transaction_accounts[program_idx].1.owner() != &solana_sdk::native_loader::id()
+    {
+        return None;
+    }
 
     #[allow(deprecated)]
     let (blockhash, lamports_per_signature) = sysvar_cache
