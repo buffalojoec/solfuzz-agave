@@ -540,11 +540,6 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
         )),
     );
 
-    // Will overwrite a builtin if environment variable `CORE_BPF_PROGRAM_ID`
-    // is set to a valid program id.
-    load_core_bpf_program!();
-
-    // Return builtins as a HashSet
     let mut builtins: HashSet<Pubkey> = HashSet::new();
     builtins.insert(solana_sdk::address_lookup_table::program::id());
     builtins.insert(solana_sdk::bpf_loader_deprecated::id());
@@ -556,6 +551,13 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
     builtins.insert(solana_system_program::id());
     builtins.insert(solana_vote_program::id());
     builtins.insert(solana_zk_sdk::zk_elgamal_proof_program::id());
+
+    // If the `CORE_BPF_PROGRAM_ID` and `CORE_BPF_TARGET` environment variables
+    // are set, this macro will do the following:
+    // * Replace the designated builtin program in the cache with a loaded ELF.
+    // * Remove that builtin's program ID from the `builtins` set above.
+    load_core_bpf_program!();
+
     builtins
 }
 
