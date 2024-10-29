@@ -49,6 +49,9 @@ use std::ffi::c_int;
 use std::sync::Arc;
 use thiserror::Error;
 
+#[cfg(feature = "core-bpf")]
+use solana_sdk::account::WritableAccount;
+
 // macro to rewrite &[IDENTIFIER, ...] to &[feature_u64(IDENTIFIER::id()), ...]
 #[macro_export]
 macro_rules! feature_list {
@@ -623,7 +626,25 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     input
         .accounts
         .iter()
-        .map(|(pubkey, account)| (*pubkey, AccountSharedData::from(account.clone())))
+        .map(|(pubkey, account)| {
+            #[cfg(feature = "core-bpf")]
+            // Fixtures provide the program account as a builtin (owned by
+            // native loader), but the program-runtime will expect the account
+            // owner to match the cache entry.
+            //
+            // Since we loaded the provided ELF into the cache under loader v3,
+            // stub out the program account here.
+            //
+            // Note: Agave does this during transaction account loading.
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/svm/src/account_loader.rs#L246-L249
+            if *pubkey == input.instruction.program_id {
+                let mut stubbed_out_program_account = AccountSharedData::default();
+                stubbed_out_program_account.set_owner(solana_sdk::bpf_loader_upgradeable::id());
+                stubbed_out_program_account.set_executable(true);
+                return (*pubkey, stubbed_out_program_account);
+            }
+            (*pubkey, AccountSharedData::from(account.clone()))
+        })
         .for_each(|x| transaction_accounts.push(x));
 
     let program_idx = transaction_accounts
@@ -683,6 +704,15 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let mut newly_loaded_programs = HashSet::<Pubkey>::new();
 
     for acc in &input.accounts {
+        #[cfg(feature = "core-bpf")]
+        // The Core BPF program's ELF has already been added to the cache.
+        // Its transaction account was stubbed out, so it can't be loaded via
+        // callback (inputs), since the account doesn't contain the ELF.
+        // Skip it here.
+        if acc.0 == input.instruction.program_id {
+            continue;
+        }
+
         // FD rejects duplicate account loads
         if !newly_loaded_programs.insert(acc.0) {
             return None;
@@ -820,7 +850,23 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             .unwrap()
             .into_iter()
             .enumerate()
-            .map(|(index, data)| (transaction_accounts[index].0, data.into()))
+            .map(|(index, data)| {
+                #[cfg(feature = "core-bpf")]
+                // Fixtures provide the program account as a builtin account
+                // (owned by native loader). Since we overrode it with the
+                // provided ELF, we need to swap it back in here to avoid a
+                // mismatch.
+                if index == program_idx {
+                    if let Some(program_account) = input
+                        .accounts
+                        .iter()
+                        .find(|(pubkey, _)| *pubkey == input.instruction.program_id)
+                    {
+                        return (program_account.0, program_account.1.clone());
+                    }
+                }
+                (transaction_accounts[index].0, data.into())
+            })
             .collect(),
         cu_avail: input.cu_avail - compute_units_consumed,
         return_data,

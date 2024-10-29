@@ -42,7 +42,7 @@ shared_obj_debug:
 
 core_bpf:
 	./scripts/fetch_program.sh $(PROGRAM)
-	RUSTFLAGS="$(RUSTFLAGS)" CARGO=$(CARGO) ./scripts/build_core_bpf.sh $(PROGRAM)
+	CARGO=$(CARGO) ./scripts/build_core_bpf.sh $(PROGRAM)
 
 binaries:
 	LLVM_PROFILE_FILE="compiler_artifacts.tmp" RUSTFLAGS="-Cinstrument-coverage" $(CARGO) build --bins --release
