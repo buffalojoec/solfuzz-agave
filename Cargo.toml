@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 # We point deps to firedancer-io/agave fork's `solfuzz-agave-vX.X-patches` branch
 # This branch is based on the agave branch we are tracking and contains patches to make fuzzing easier
-# Refer to https://github.com/firedancer-io/agave/blob/solfuzz-agave-v2.0-patches/SOLFUZZ_README.md
+# Refer to https://github.com/firedancer-io/agave/blob/agave-v2.1.0-patches/SOLFUZZ_README.md
 # for details on how to manage this branch
 [dependencies]
 bincode = "1.3.3"

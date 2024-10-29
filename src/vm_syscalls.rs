@@ -29,8 +29,11 @@ use solana_program_runtime::{
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction_context::{TransactionAccount, TransactionContext};
 use solana_sdk::{
-    account::AccountSharedData, clock::Clock, epoch_schedule::EpochSchedule, rent::Rent,
-    sysvar::{SysvarId,last_restart_slot},
+    account::AccountSharedData,
+    clock::Clock,
+    epoch_schedule::EpochSchedule,
+    rent::Rent,
+    sysvar::{last_restart_slot, SysvarId},
 };
 use std::{ffi::c_int, sync::Arc};
 
@@ -137,7 +140,7 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
             callbackback(&bincode::serialize(&Rent::default()).unwrap());
         }
         if *pubkey == last_restart_slot::id() {
-            let slot_val = 5000 as u64;
+            let slot_val = 5000_u64;
             callbackback(&bincode::serialize(&slot_val).unwrap());
         }
     });

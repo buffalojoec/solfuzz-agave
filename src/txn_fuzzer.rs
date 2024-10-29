@@ -326,7 +326,7 @@ impl From<LoadAndExecuteTransactionsOutput> for TxnResult {
             is_ok,
             status,
             instruction_error,
-            instruction_error_index: instruction_error_index.into(),
+            instruction_error_index,
             custom_error,
             return_data,
             executed_units,
