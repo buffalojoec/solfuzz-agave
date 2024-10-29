@@ -29,5 +29,6 @@ set_core_bpf_vars "$1"
 
 CORE_BPF_PROGRAM_ID=$CORE_BPF_PROGRAM_ID CORE_BPF_TARGET=$CORE_BPF_TARGET FORCE_RECOMPILE=true $CARGO build \
     --target x86_64-unknown-linux-gnu \
+    --features core-bpf \
     --lib \
     --release

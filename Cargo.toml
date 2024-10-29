@@ -50,5 +50,8 @@ solana-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6
 solana-zk-token-sdk = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
 
 [features]
+# This feature is used to compile a target with a builtin replaced by a BPF program.
+# Requires the `CORE_BPF_PROGRAM_ID` and `CORE_BPF_TARGET` environment variables.
+core-bpf = []
 # This feature is used to stub out certain parts of the agave runtime for fuzzing
 stub-agave = ["solana-program-runtime/stub-proc-instr"]
