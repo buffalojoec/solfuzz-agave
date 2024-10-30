@@ -877,7 +877,35 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         } else {
             None
         },
-        result: result.err(),
+        #[allow(clippy::map_identity)]
+        result: result.err().map(|err| {
+            #[cfg(feature = "core-bpf")]
+            // Some errors don't directly map between builtins and their BPF
+            // versions.
+            //
+            // For example, when a builtin program exceeds the compute budget,
+            // the builtin's `DEFAULT_COMPUTE_UNITS` are deducted from the
+            // meter, and if the meter is exhuasted, the invoke context will
+            // throw `InstructionError::ComputationalBudgetExceeded`.
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L73
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L574
+            //
+            // However, for a BPF program, if the compute meter is exhausted,
+            // the error comes from the VM, and is converted to
+            // `InstructionError::ProgramFailedToComplete`.
+            // https://github.com/solana-labs/rbpf/blob/69a52ec6a341bb7374d387173b5e6dc56218fe0c/src/error.rs#L44
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L547
+            //
+            // Therefore, some errors require reconciliation when testing a BPF
+            // program against its builtin implementation.
+            if err == InstructionError::ProgramFailedToComplete
+                && (input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS
+                    || compute_units_consumed >= input.cu_avail)
+            {
+                return InstructionError::ComputationalBudgetExceeded;
+            }
+            err
+        }),
         modified_accounts: transaction_context
             .deconstruct_without_keys()
             .unwrap()
