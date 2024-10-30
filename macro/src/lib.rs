@@ -86,3 +86,29 @@ pub fn load_core_bpf_program(_: TokenStream) -> TokenStream {
 
     quote!().into()
 }
+
+#[proc_macro]
+pub fn declare_core_bpf_default_compute_units(_: TokenStream) -> TokenStream {
+    let mut tokens = quote!();
+
+    if let Ok(program_id_str) = std::env::var("CORE_BPF_PROGRAM_ID") {
+        let program_id = Pubkey::from_str(&program_id_str).expect("Invalid address");
+        if !SUPPORTED_BUILTINS.contains(&program_id) {
+            panic!("Unsupported program id: {}", program_id);
+        }
+
+        if program_id == solana_sdk::address_lookup_table::program::id() {
+            tokens = quote! {
+                #[cfg(feature = "core-bpf")]
+                const CORE_BPF_DEFAULT_COMPUTE_UNITS: u64 = solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS;
+            }
+        } else if program_id == solana_sdk::config::program::id() {
+            tokens = quote! {
+                #[cfg(feature = "core-bpf")]
+                const CORE_BPF_DEFAULT_COMPUTE_UNITS: u64 = solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS;
+            }
+        }
+    }
+
+    tokens.into()
+}
