@@ -42,7 +42,7 @@ use solana_timings::ExecuteTimings;
 use crate::utils::err_map::instr_err_to_num;
 use crate::utils::feature_u64;
 use solana_svm::transaction_processing_callback::TransactionProcessingCallback;
-use solfuzz_agave_macro::load_core_bpf_program;
+use solfuzz_agave_macro::{declare_core_bpf_default_compute_units, load_core_bpf_program};
 use std::collections::HashSet;
 use std::env;
 use std::ffi::c_int;
@@ -255,6 +255,13 @@ static SUPPORTED_FEATURES: &[u64] = feature_list![
     zk_elgamal_proof_program_enabled,
     move_stake_and_move_lamports_ixs,
 ];
+
+// If the `CORE_BPF_PROGRAM_ID` variable is set, declares the default compute
+// units used by the program's builtin version.
+//
+// This constant is used to stub-out compute unit conformance checks, since the
+// BPF version will use different amounts of CUs.
+declare_core_bpf_default_compute_units!();
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/org.solana.sealevel.v1.rs"));
@@ -565,7 +572,23 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
-    // TODO this shouldn't be default
+    #[cfg(feature = "core-bpf")]
+    // If the fixture declares `cu_avail` to be less than the builtin version's
+    // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
+    // exhaustion.
+    //
+    // If the builtin version would otherwise _not_ exhuast the CU meter, give
+    // the BPF version the default budget for BPF programs (200k), to avoid any
+    // mismatches from the BPF program exhuasting the meter when the builtin
+    // did not.
+    let compute_budget = {
+        let mut budget = ComputeBudget::default();
+        if input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS {
+            budget.compute_unit_limit = input.cu_avail;
+        }
+        budget
+    };
+    #[cfg(not(feature = "core-bpf"))]
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
         ..ComputeBudget::default()
@@ -836,6 +859,16 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         &mut timings,
     );
 
+    #[cfg(feature = "core-bpf")]
+    // To keep alignment with a builtin run, deduct only the CUs the builtin
+    // version would have consumed, so the fixture realizes the same CU
+    // deduction across both BPF and builtin in its effects.
+    let cu_avail = input
+        .cu_avail
+        .saturating_sub(CORE_BPF_DEFAULT_COMPUTE_UNITS);
+    #[cfg(not(feature = "core-bpf"))]
+    let cu_avail = input.cu_avail - compute_units_consumed;
+
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
@@ -868,7 +901,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
                 (transaction_accounts[index].0, data.into())
             })
             .collect(),
-        cu_avail: input.cu_avail - compute_units_consumed,
+        cu_avail,
         return_data,
     })
 }
