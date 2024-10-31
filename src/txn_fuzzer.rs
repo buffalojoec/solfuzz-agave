@@ -13,6 +13,7 @@ use solana_runtime::bank::builtins::BUILTINS;
 use solana_runtime::bank::{Bank, LoadAndExecuteTransactionsOutput};
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::account::{AccountSharedData, ReadableAccount};
+use solana_sdk::clock::MAX_PROCESSING_AGE;
 use solana_sdk::epoch_schedule::EpochSchedule;
 use solana_sdk::feature_set::FeatureSet;
 use solana_sdk::genesis_config::GenesisConfig;
@@ -564,7 +565,7 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
     let mut metrics = TransactionErrorMetrics::default();
     let result = bank.load_and_execute_transactions(
         &batch,
-        context.max_age as usize,
+        MAX_PROCESSING_AGE,
         &mut timings,
         &mut metrics,
         configs,
