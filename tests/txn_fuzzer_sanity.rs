@@ -232,7 +232,6 @@ fn test_txn_execute_clock() {
 
     let txn_input = TxnContext {
         tx: Some(tx),
-        max_age: 500,
         blockhash_queue: blockhash_queue,
         epoch_ctx: Some(epoch_ctx),
         slot_ctx: Some(slot_ctx),
@@ -366,7 +365,6 @@ fn test_simple_transfer() {
 
     let txn_input = TxnContext {
         tx: Some(tx),
-        max_age: 500,
         blockhash_queue: blockhash_queue,
         epoch_ctx: Some(epoch_ctx),
         slot_ctx: Some(slot_ctx),
@@ -544,7 +542,6 @@ fn test_lookup_table() {
 
     let txn_input = TxnContext {
         tx: Some(tx),
-        max_age: 500,
         blockhash_queue: blockhash_queue,
         epoch_ctx: Some(epoch_ctx),
         slot_ctx: Some(slot_ctx),
