@@ -51,13 +51,18 @@ pub fn load_core_bpf_program(_: TokenStream) -> TokenStream {
         let elf_data = read_file(Path::new(&elf_path));
         let elf_bytes = ElfBytes(elf_data);
 
+        println!(
+            "    [SF_AGAVE]: Overriding builtin program with provided BPF target: {}",
+            &program_id
+        );
+
         return quote! {
             let program_id = Pubkey::new_from_array(#program_id_bytes);
             let elf = #elf_bytes;
             cache.replenish(
                 program_id,
                 Arc::new(
-                    solana_program_runtime::loaded_programs::LoadedProgram::new(
+                    solana_program_runtime::loaded_programs::ProgramCacheEntry::new(
                         &solana_sdk::bpf_loader_upgradeable::id(),
                         cache.environments.program_runtime_v1.clone(),
                         0,
