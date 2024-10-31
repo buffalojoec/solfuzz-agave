@@ -26,7 +26,6 @@ use solana_program_runtime::{
         vm::EbpfVm,
     },
 };
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction_context::{TransactionAccount, TransactionContext};
 use solana_sdk::{
     account::AccountSharedData,
@@ -35,6 +34,7 @@ use solana_sdk::{
     rent::Rent,
     sysvar::{last_restart_slot, SysvarId},
 };
+use solana_sdk::{pubkey::Pubkey, transaction_context::IndexOfAccount};
 use std::{ffi::c_int, sync::Arc};
 
 #[no_mangle]
@@ -169,6 +169,39 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
         Some(log_collector.clone()),
         compute_budget,
     );
+
+    let instr = &instr_ctx.instruction;
+    let instr_accounts = crate::get_instr_accounts(&transaction_accounts, &instr.accounts);
+
+    let caller_instr_ctx = invoke_context
+        .transaction_context
+        .get_next_instruction_context()
+        .unwrap();
+
+    let program_idx_in_txn = transaction_accounts
+        .iter()
+        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)?
+        as IndexOfAccount;
+
+    caller_instr_ctx.configure(
+        &[program_idx_in_txn],
+        instr_accounts.as_slice(),
+        &instr.data,
+    );
+
+    match invoke_context.push() {
+        Ok(_) => (),
+        Err(_) => eprintln!("Failed to push invoke context"),
+    }
+    invoke_context
+        .set_syscall_context(solana_program_runtime::invoke_context::SyscallContext {
+            allocator: solana_program_runtime::invoke_context::BpfAllocator::new(
+                input.vm_ctx.clone().unwrap().heap_max,
+            ),
+            accounts_metadata: vec![], // TODO: accounts metadata for direct mapping support
+            trace_log: Vec::new(),
+        })
+        .unwrap();
 
     // TODO: support different versions
     let sbpf_version = &SBPFVersion::V1;
