@@ -592,20 +592,15 @@ pub fn execute_transaction(context: TxnContext) -> Option<TxnResult> {
             let pubkey = Pubkey::new_from_array(account.address.clone().try_into().unwrap());
             loaded_account_keys.contains(&pubkey) && pubkey != sysvar::instructions::id()
         });
+        relevant_accounts.acct_states = relevant_accounts
+            .clone()
+            .acct_states
+            .into_iter()
+            .enumerate()
+            .filter(|&(i, _)| sanitized_transaction.message().is_writable(i))
+            .map(|(_, account)| account)
+            .collect();
 
-        // Fill values for executable accounts with no lamports reported in output (this metadata was omitted by Agave for performance reasons)
-        for account in relevant_accounts.acct_states.iter_mut() {
-            if account.lamports == 0 && account.executable {
-                let account_data = bank.get_account(&Pubkey::new_from_array(
-                    account.address.clone().try_into().unwrap(),
-                ));
-                if let Some(account_data) = account_data {
-                    account.lamports = account_data.lamports();
-                    account.data = account_data.data().to_vec();
-                    account.rent_epoch = account_data.rent_epoch();
-                }
-            }
-        }
         txn_result.resulting_state = Some(relevant_accounts.clone());
     }
 
