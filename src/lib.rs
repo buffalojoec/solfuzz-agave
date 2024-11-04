@@ -572,6 +572,13 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
+    // solana_logger::setup_with_default(
+    //     "solana_rbpf::vm=debug,\
+    //      solana_runtime::message_processor=debug,\
+    //      solana_runtime::system_instruction_processor=trace,\
+    //      solana_program_test=info",
+    // );
+
     #[cfg(feature = "core-bpf")]
     // If the fixture declares `cu_avail` to be less than the builtin version's
     // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
@@ -584,7 +591,8 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let compute_budget = {
         let mut budget = ComputeBudget::default();
         if input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS {
-            budget.compute_unit_limit = input.cu_avail;
+            // budget.compute_unit_limit = input.cu_avail;
+            budget.compute_unit_limit = 0;
         }
         budget
     };
@@ -898,7 +906,8 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             // Therefore, some errors require reconciliation when testing a BPF
             // program against its builtin implementation.
             if err == InstructionError::ProgramFailedToComplete
-                && compute_units_consumed >= input.cu_avail
+                && (input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS
+                    || compute_units_consumed >= input.cu_avail)
             {
                 return InstructionError::ComputationalBudgetExceeded;
             }
