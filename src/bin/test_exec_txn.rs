@@ -20,14 +20,14 @@ fn exec(input: &PathBuf) -> bool {
         }
     };
 
-    let mut expected = match fixture.output {
+    let expected = match fixture.output {
         Some(e) => e,
         None => {
             println!("No fixture found.");
             return false;
         }
     };
-    let mut effects = match solfuzz_agave::txn_fuzzer::execute_transaction(context) {
+    let effects = match solfuzz_agave::txn_fuzzer::execute_transaction(context) {
         Some(e) => e,
         None => {
             println!(
@@ -37,18 +37,6 @@ fn exec(input: &PathBuf) -> bool {
             return false;
         }
     };
-
-    /* Ignore rent epoch fields */
-    if let Some(resulting_state) = expected.resulting_state.as_mut() {
-        for account in resulting_state.acct_states.iter_mut() {
-            account.rent_epoch = 0;
-        }
-    }
-    if let Some(resulting_state) = effects.resulting_state.as_mut() {
-        for account in resulting_state.acct_states.iter_mut() {
-            account.rent_epoch = 0;
-        }
-    }
 
     let ok = effects == expected;
     if ok {
