@@ -42,12 +42,15 @@ use solana_timings::ExecuteTimings;
 use crate::utils::err_map::instr_err_to_num;
 use crate::utils::feature_u64;
 use solana_svm::transaction_processing_callback::TransactionProcessingCallback;
-use solfuzz_agave_macro::load_core_bpf_program;
+use solfuzz_agave_macro::{declare_core_bpf_default_compute_units, load_core_bpf_program};
 use std::collections::HashSet;
 use std::env;
 use std::ffi::c_int;
 use std::sync::Arc;
 use thiserror::Error;
+
+#[cfg(feature = "core-bpf")]
+use solana_sdk::account::WritableAccount;
 
 // macro to rewrite &[IDENTIFIER, ...] to &[feature_u64(IDENTIFIER::id()), ...]
 #[macro_export]
@@ -252,6 +255,13 @@ static SUPPORTED_FEATURES: &[u64] = feature_list![
     zk_elgamal_proof_program_enabled,
     move_stake_and_move_lamports_ixs,
 ];
+
+// If the `CORE_BPF_PROGRAM_ID` variable is set, declares the default compute
+// units used by the program's builtin version.
+//
+// This constant is used to stub-out compute unit conformance checks, since the
+// BPF version will use different amounts of CUs.
+declare_core_bpf_default_compute_units!();
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/org.solana.sealevel.v1.rs"));
@@ -562,7 +572,23 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
-    // TODO this shouldn't be default
+    #[cfg(feature = "core-bpf")]
+    // If the fixture declares `cu_avail` to be less than the builtin version's
+    // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
+    // exhaustion.
+    //
+    // If the builtin version would otherwise _not_ exhuast the CU meter, give
+    // the BPF version the default budget for BPF programs (200k), to avoid any
+    // mismatches from the BPF program exhuasting the meter when the builtin
+    // did not.
+    let compute_budget = {
+        let mut budget = ComputeBudget::default();
+        if input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS {
+            budget.compute_unit_limit = 0; // Ensures CU meter exhaustion.
+        }
+        budget
+    };
+    #[cfg(not(feature = "core-bpf"))]
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
         ..ComputeBudget::default()
@@ -623,7 +649,25 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     input
         .accounts
         .iter()
-        .map(|(pubkey, account)| (*pubkey, AccountSharedData::from(account.clone())))
+        .map(|(pubkey, account)| {
+            #[cfg(feature = "core-bpf")]
+            // Fixtures provide the program account as a builtin (owned by
+            // native loader), but the program-runtime will expect the account
+            // owner to match the cache entry.
+            //
+            // Since we loaded the provided ELF into the cache under loader v3,
+            // stub out the program account here.
+            //
+            // Note: Agave does this during transaction account loading.
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/svm/src/account_loader.rs#L246-L249
+            if *pubkey == input.instruction.program_id {
+                let mut stubbed_out_program_account = AccountSharedData::default();
+                stubbed_out_program_account.set_owner(solana_sdk::bpf_loader_upgradeable::id());
+                stubbed_out_program_account.set_executable(true);
+                return (*pubkey, stubbed_out_program_account);
+            }
+            (*pubkey, AccountSharedData::from(account.clone()))
+        })
         .for_each(|x| transaction_accounts.push(x));
 
     let program_idx = transaction_accounts
@@ -683,6 +727,15 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let mut newly_loaded_programs = HashSet::<Pubkey>::new();
 
     for acc in &input.accounts {
+        #[cfg(feature = "core-bpf")]
+        // The Core BPF program's ELF has already been added to the cache.
+        // Its transaction account was stubbed out, so it can't be loaded via
+        // callback (inputs), since the account doesn't contain the ELF.
+        // Skip it here.
+        if acc.0 == input.instruction.program_id {
+            continue;
+        }
+
         // FD rejects duplicate account loads
         if !newly_loaded_programs.insert(acc.0) {
             return None;
@@ -806,6 +859,16 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         &mut timings,
     );
 
+    #[cfg(feature = "core-bpf")]
+    // To keep alignment with a builtin run, deduct only the CUs the builtin
+    // version would have consumed, so the fixture realizes the same CU
+    // deduction across both BPF and builtin in its effects.
+    let cu_avail = input
+        .cu_avail
+        .saturating_sub(CORE_BPF_DEFAULT_COMPUTE_UNITS);
+    #[cfg(not(feature = "core-bpf"))]
+    let cu_avail = input.cu_avail - compute_units_consumed;
+
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
@@ -814,15 +877,63 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         } else {
             None
         },
-        result: result.err(),
+        #[allow(clippy::map_identity)]
+        result: result.err().map(|err| {
+            #[cfg(feature = "core-bpf")]
+            // Some errors don't directly map between builtins and their BPF
+            // versions.
+            //
+            // For example, when a builtin program exceeds the compute budget,
+            // the builtin's `DEFAULT_COMPUTE_UNITS` are deducted from the
+            // meter, and if the meter is exhuasted, the invoke context will
+            // throw `InstructionError::ComputationalBudgetExceeded`.
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L73
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L574
+            //
+            // However, for a BPF program, if the compute meter is exhausted,
+            // the error comes from the VM, and is converted to
+            // `InstructionError::ProgramFailedToComplete`.
+            // https://github.com/solana-labs/rbpf/blob/69a52ec6a341bb7374d387173b5e6dc56218fe0c/src/error.rs#L44
+            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L547
+            //
+            // Therefore, some errors require reconciliation when testing a BPF
+            // program against its builtin implementation.
+            if err == InstructionError::ProgramFailedToComplete
+                && (input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS
+                    || compute_units_consumed >= input.cu_avail)
+            {
+                return InstructionError::ComputationalBudgetExceeded;
+            }
+            err
+        }),
         modified_accounts: transaction_context
             .deconstruct_without_keys()
             .unwrap()
             .into_iter()
             .enumerate()
-            .map(|(index, data)| (transaction_accounts[index].0, data.into()))
+            .map(|(index, data)| {
+                #[cfg(feature = "core-bpf")]
+                // Fixtures provide the program account as a builtin account
+                // (owned by native loader).
+                //
+                // When we built out the transaction accounts, we stubbed out
+                // the program account to be owned by loader v3.
+                //
+                // We need to swap back in the original here to avoid a
+                // mismatch.
+                if index == program_idx {
+                    if let Some(program_account) = input
+                        .accounts
+                        .iter()
+                        .find(|(pubkey, _)| *pubkey == input.instruction.program_id)
+                    {
+                        return (program_account.0, program_account.1.clone());
+                    }
+                }
+                (transaction_accounts[index].0, data.into())
+            })
             .collect(),
-        cu_avail: input.cu_avail - compute_units_consumed,
+        cu_avail,
         return_data,
     })
 }
