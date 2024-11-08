@@ -50,7 +50,10 @@ use std::sync::Arc;
 use thiserror::Error;
 
 #[cfg(feature = "core-bpf")]
-use solana_sdk::account::WritableAccount;
+use {
+    solana_sdk::account::WritableAccount, solana_sdk::slot_hashes::SlotHashes,
+    solana_sdk::sysvar::Sysvar,
+};
 
 // macro to rewrite &[IDENTIFIER, ...] to &[feature_u64(IDENTIFIER::id()), ...]
 #[macro_export]
@@ -600,6 +603,28 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     sysvar_cache.fill_missing_entries(|pubkey, callbackback| {
         if let Some(account) = input.accounts.iter().find(|(key, _)| key == pubkey) {
             if account.1.lamports > 0 {
+                #[cfg(feature = "core-bpf")]
+                // BPF versions of programs, such as Address Lookup Table, rely
+                // on the new `SolGetSysvar` syscall. However, APIs for
+                // querying slot hashes built on top of `SolGetSysvar` are
+                // designed with the assumption that the `SlotHashes` data
+                // stored in the sysvar cache is `SlotHashes::size_of()` in
+                // length.
+                // See https://github.com/anza-xyz/agave/blob/96249691b4b7c873220b27376f271ead38392541/sdk/program/src/sysvar/slot_hashes.rs#L101.
+                //
+                // Fixtures may provide an incorrect sized slot hashes account,
+                // so this step is to rectify it by extending the buffer with
+                // all zeroes before adding it to the sysvar cache.
+                if &input.instruction.program_id == &solana_sdk::address_lookup_table::program::id()
+                    && pubkey == &SlotHashes::id()
+                {
+                    if account.1.data.len() < SlotHashes::size_of() {
+                        // Extend the data to the right size.
+                        let mut data = vec![0; SlotHashes::size_of()];
+                        data[..account.1.data.len()].copy_from_slice(&account.1.data);
+                        return callbackback(&data);
+                    }
+                }
                 callbackback(&account.1.data);
             }
         }
