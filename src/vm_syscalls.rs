@@ -180,8 +180,8 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
 
     let program_idx_in_txn = transaction_accounts
         .iter()
-        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)?
-        as IndexOfAccount;
+        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)
+        .unwrap_or(0) as IndexOfAccount;
 
     caller_instr_ctx.configure(
         &[program_idx_in_txn],
