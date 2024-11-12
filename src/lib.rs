@@ -872,8 +872,19 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
-        custom_err: if let Err(InstructionError::Custom(x)) = result {
-            Some(x)
+        custom_err: if let Err(InstructionError::Custom(code)) = result {
+            #[cfg(feature = "core-bpf")]
+            // See comment below under `result` for special-casing of custom
+            // errors for Core BPF programs.
+            if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
+                None
+            } else if program_id == &solana_sdk::config::program::id() && code == 0 {
+                None
+            } else {
+                Some(code)
+            }
+            #[cfg(not(feature = "core-bpf"))]
+            Some(code)
         } else {
             None
         },
@@ -903,6 +914,41 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
                     || compute_units_consumed >= input.cu_avail)
             {
                 return InstructionError::ComputationalBudgetExceeded;
+            }
+            #[cfg(feature = "core-bpf")]
+            // Another such error case arises when a program performs a write
+            // to an account, but the data it writes is the exact same data
+            // that's currently stored in the account state.
+            //
+            // For builtins, the `TransactionContext` is invoked when any write
+            // is performed, asking it whether or not a write is allowed,
+            // regardless of the data being written. If the account is not
+            // writable, it throws `InstructionError::ReadonlyDataModified`.
+            //
+            // For BPF programs, writes to readonly accounts are caught _after_
+            // the VM finishes execution, when the loader inspects the
+            // serialized input data region. If a write was performed that did
+            // not modify serialized account state, then no error is thrown.
+            //
+            // As a result, Core BPF programs have been outfitted with custom
+            // errors when `is_writable` checks fail. These errors are
+            // special-cased below to avoid fixture mismatches.
+            match err {
+                InstructionError::Custom(code) => {
+                    if program_id == &solana_sdk::address_lookup_table::program::id() {
+                        // Special-cased custom error codes for the ALT program.
+                        if code == 10 {
+                            return InstructionError::ReadonlyDataModified;
+                        }
+                    }
+                    if program_id == &solana_sdk::config::program::id() {
+                        // Special-cased custom error codes for the Config program.
+                        if code == 0 {
+                            return InstructionError::ReadonlyDataModified;
+                        }
+                    }
+                }
+                _ => {}
             }
             err
         }),
