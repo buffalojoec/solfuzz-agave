@@ -2,7 +2,7 @@ use crate::{
     proto::{SyscallContext, SyscallEffects, VmContext},
     utils::{
         pchash_inverse,
-        vm::{err_map, mem_regions, STACK_SIZE},
+        vm::{err_map, mem_regions, HEAP_MAX, STACK_SIZE},
     },
     InstrContext,
 };
@@ -122,6 +122,10 @@ fn execute_vm_interp(syscall_context: SyscallContext) -> Option<SyscallEffects> 
 
     // setup memory
     let vm_ctx = syscall_context.vm_ctx.unwrap();
+    if vm_ctx.heap_max as usize > HEAP_MAX {
+        return None;
+    }
+
     let function_registry = setup_internal_fn_registry(&vm_ctx);
 
     let syscall_inv = syscall_context.syscall_invocation.unwrap();
