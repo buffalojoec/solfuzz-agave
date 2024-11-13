@@ -147,8 +147,8 @@ pub fn execute_vm_cpi_syscall(input: SyscallContext) -> Option<SyscallEffects> {
 
     let program_idx_in_txn = transaction_accounts
         .iter()
-        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)
-        .unwrap_or(0) as IndexOfAccount;
+        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)?
+        as IndexOfAccount;
 
     caller_instr_ctx.configure(
         &[program_idx_in_txn],
@@ -201,7 +201,7 @@ pub fn execute_vm_cpi_syscall(input: SyscallContext) -> Option<SyscallEffects> {
             ], // TODO: accounts metadata for direct mapping support
             trace_log: Vec::new(),
         })
-        .unwrap_or(());
+        .unwrap();
 
     // Set up memory mapping
     let syscall_inv = input.syscall_invocation.unwrap();

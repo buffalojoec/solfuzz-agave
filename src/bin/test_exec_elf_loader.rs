@@ -1,6 +1,6 @@
 use clap::Parser;
 use prost::Message;
-use solfuzz_agave::proto::{SyscallFixture};
+use solfuzz_agave::proto::ElfLoaderFixture;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -11,8 +11,8 @@ struct Cli {
 
 fn exec(input: &PathBuf) -> bool {
     let blob = std::fs::read(input).unwrap();
-    let fixture = SyscallFixture::decode(&blob[..]).unwrap();
-    let context: solfuzz_agave::proto::SyscallContext = match fixture.input {
+    let fixture = ElfLoaderFixture::decode(&blob[..]).unwrap();
+    let context: solfuzz_agave::proto::ElfLoaderCtx = match fixture.input {
         Some(i) => i,
         None => {
             println!("No context found.");
@@ -27,7 +27,7 @@ fn exec(input: &PathBuf) -> bool {
             return false;
         }
     };
-    let effects = match solfuzz_agave::vm_cpi_syscall::execute_vm_cpi_syscall(context) {
+    let effects = match solfuzz_agave::elf_loader::execute_elf_loader(context) {
         Some(e) => e,
         None => {
             println!(
@@ -38,10 +38,7 @@ fn exec(input: &PathBuf) -> bool {
         }
     };
 
-    // Remove non-modified accounts by comparing each account with input
-    let mut pruned_effects = effects.clone();
-
-    let ok = pruned_effects == expected;
+    let ok = effects == expected;
     if ok {
         println!("OK: {:?}", input);
     } else {

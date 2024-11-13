@@ -76,20 +76,12 @@ pub unsafe extern "C" fn sol_compat_elf_loader_v1(
         Ok(context) => context,
         Err(_) => return 0,
     };
-    let mut elf_bytes = match elf_loader_ctx.elf {
-        Some(elf) => elf.data,
-        None => return 0,
-    };
-
-    if elf_bytes.len() != elf_loader_ctx.elf_sz as usize {
-        // setup elf bytes to match the size
-        elf_bytes.resize(elf_loader_ctx.elf_sz as usize, 0);
-    }
-
-    let elf_loader_effects = match load_elf(elf_bytes.as_slice(), elf_loader_ctx.deploy_checks) {
+    
+    let elf_loader_effects = match execute_elf_loader(elf_loader_ctx) {
         Some(v) => v,
         None => return 0,
     };
+
     let out_slice = std::slice::from_raw_parts_mut(out_ptr, (*out_psz) as usize);
     let out_vec = elf_loader_effects.encode_to_vec();
     if out_vec.len() > out_slice.len() {
@@ -98,4 +90,23 @@ pub unsafe extern "C" fn sol_compat_elf_loader_v1(
     out_slice[..out_vec.len()].copy_from_slice(&out_vec);
     *out_psz = out_vec.len() as u64;
     1
+}
+
+pub fn execute_elf_loader(input: ElfLoaderCtx) -> Option<ElfLoaderEffects> {
+    let mut elf_bytes = match input.elf {
+        Some(elf) => elf.data,
+        None => return None,
+    };
+
+    if elf_bytes.len() != input.elf_sz as usize {
+        // setup elf bytes to match the size
+        elf_bytes.resize(input.elf_sz as usize, 0);
+    }
+
+    let elf_loader_effects = match load_elf(elf_bytes.as_slice(), input.deploy_checks) {
+        Some(v) => v,
+        None => return None,
+    };
+
+    Some(elf_loader_effects)
 }
