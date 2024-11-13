@@ -180,8 +180,8 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
 
     let program_idx_in_txn = transaction_accounts
         .iter()
-        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)?
-        as IndexOfAccount;
+        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)
+        .unwrap_or(0) as IndexOfAccount;
 
     caller_instr_ctx.configure(
         &[program_idx_in_txn],
@@ -201,7 +201,7 @@ fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
             accounts_metadata: vec![], // TODO: accounts metadata for direct mapping support
             trace_log: Vec::new(),
         })
-        .unwrap();
+        .unwrap_or(());
 
     // TODO: support different versions
     let sbpf_version = &SBPFVersion::V1;
