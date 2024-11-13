@@ -17,29 +17,29 @@ lazy_static = "1.4.0"
 prost = "0.13.1"
 prost-types = "0.13.1"
 libc = "0.2.155"
-solana-address-lookup-table-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-accounts-db = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-bpf-loader-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-compute-budget = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-compute-budget-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-config-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-ledger = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-loader-v4-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-log-collector = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-program-runtime = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-runtime = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800", features = ["dev-context-only-utils"] }
-solana-stake-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-system-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-svm = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-svm-transaction = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-sdk = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-timings = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-vote-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-zk-sdk = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-zk-elgamal-proof-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-poseidon = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-runtime-transaction = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
+solana-address-lookup-table-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-accounts-db = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-bpf-loader-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-compute-budget = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-compute-budget-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-config-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-ledger = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-loader-v4-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-log-collector = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-program-runtime = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-runtime = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4", features = ["dev-context-only-utils"] }
+solana-stake-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-system-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-svm = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-svm-transaction = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-sdk = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-timings = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-vote-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-zk-sdk = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-zk-elgamal-proof-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-poseidon = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-runtime-transaction = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 solfuzz-agave-macro = { path = "macro" }
 thiserror = "1.0.65"
 
@@ -48,8 +48,8 @@ prost-build = "0.13.1"
 
 
 [patch.crates-io]
-solana-program = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
-solana-zk-token-sdk = { git = "https://github.com/firedancer-io/agave", rev = "b641c6e050d759e41dd7d794c3d0a12638c11800" }
+solana-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-zk-token-sdk = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 
 [features]
 # This feature is used to compile a target with a builtin replaced by a BPF program.
