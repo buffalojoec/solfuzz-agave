@@ -89,7 +89,7 @@ pub unsafe extern "C" fn sol_compat_vm_interp_v1(
 }
 
 // We are actually executing the JIT-compiled program here
-fn execute_vm_interp(syscall_context: SyscallContext) -> Option<SyscallEffects> {
+pub fn execute_vm_interp(syscall_context: SyscallContext) -> Option<SyscallEffects> {
     let instr_ctx: InstrContext = syscall_context.instr_ctx?.try_into().ok()?;
     let feature_set = instr_ctx.feature_set;
 

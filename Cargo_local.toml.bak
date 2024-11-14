@@ -35,7 +35,7 @@ solana-runtime = { path = "../agave/runtime", features = ["dev-context-only-util
 solana-stake-program = { path = "../agave/programs/stake" }
 solana-system-program = { path = "../agave/programs/system" }
 solana-svm = { path = "../agave/svm" }
-solana-svm-transaction = { path = "../fd_agave/svm-transaction" }
+solana-svm-transaction = { path = "../agave/svm-transaction" }
 solana-sdk = { path = "../agave/sdk" }
 solana-timings = { path = "../agave/timings" }
 solana-vote-program = { path = "../agave/programs/vote" }

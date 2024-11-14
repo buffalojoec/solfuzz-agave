@@ -92,11 +92,28 @@ pub unsafe extern "C" fn sol_compat_vm_validate_v1(
         Ok(context) => context,
         Err(_) => return 0,
     };
-    let vm_ctx = match ctx.vm_ctx {
-        Some(vm_ctx) => vm_ctx,
+
+    let validate_vm_effects = match execute_vm_validate(ctx) {
+        Some(v) => v,
         None => return 0,
     };
-    let feature_set: FeatureSet = ctx
+
+    let out_slice = std::slice::from_raw_parts_mut(out_ptr, (*out_psz) as usize);
+    let out_bytes = validate_vm_effects.encode_to_vec();
+    if out_bytes.len() > out_slice.len() {
+        return 0;
+    }
+    out_slice[..out_bytes.len()].copy_from_slice(&out_bytes);
+    *out_psz = out_bytes.len() as u64;
+    1
+}
+
+pub fn execute_vm_validate(input: FullVmContext) -> Option<ValidateVmEffects> {
+    let vm_ctx = match input.vm_ctx {
+        Some(vm_ctx) => vm_ctx,
+        None => return None,
+    };
+    let feature_set: FeatureSet = input
         .features
         .as_ref()
         .map(|fs| fs.into())
@@ -110,24 +127,11 @@ pub unsafe extern "C" fn sol_compat_vm_validate_v1(
         .rodata
         .get(text_off..text_off.saturating_add(text_len))
     {
-        Some(bytes) => {
-            let validate_vm_effects = validate_vm_text(bytes, &feature_set);
-            match validate_vm_effects {
-                Some(context) => context,
-                None => return 0,
-            }
-        }
-        None => ValidateVmEffects {
+        Some(bytes) => validate_vm_text(bytes, &feature_set),
+        None => Some(ValidateVmEffects {
             result: -36, // FD error code for invalid text section
             success: false,
-        },
+        }),
     };
-    let out_slice = std::slice::from_raw_parts_mut(out_ptr, (*out_psz) as usize);
-    let out_bytes = validate_vm_effects.encode_to_vec();
-    if out_bytes.len() > out_slice.len() {
-        return 0;
-    }
-    out_slice[..out_bytes.len()].copy_from_slice(&out_bytes);
-    *out_psz = out_bytes.len() as u64;
-    1
+    validate_vm_effects
 }

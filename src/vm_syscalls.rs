@@ -65,7 +65,7 @@ pub unsafe extern "C" fn sol_compat_vm_syscall_execute_v1(
     1
 }
 
-fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
+pub fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
     let instr_ctx: InstrContext = input.instr_ctx?.try_into().ok()?;
 
     let feature_set = instr_ctx.feature_set;
