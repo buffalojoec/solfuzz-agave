@@ -1,6 +1,6 @@
 use clap::Parser;
 use prost::Message;
-use solfuzz_agave::proto::{SyscallFixture};
+use solfuzz_agave::proto::SyscallFixture;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -38,10 +38,7 @@ fn exec(input: &PathBuf) -> bool {
         }
     };
 
-    // Remove non-modified accounts by comparing each account with input
-    let mut pruned_effects = effects.clone();
-
-    let ok = pruned_effects == expected;
+    let ok = effects == expected;
     if ok {
         println!("OK: {:?}", input);
     } else {

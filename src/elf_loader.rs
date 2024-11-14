@@ -76,7 +76,7 @@ pub unsafe extern "C" fn sol_compat_elf_loader_v1(
         Ok(context) => context,
         Err(_) => return 0,
     };
-    
+
     let elf_loader_effects = match execute_elf_loader(elf_loader_ctx) {
         Some(v) => v,
         None => return 0,
