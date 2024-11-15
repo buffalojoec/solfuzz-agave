@@ -17,6 +17,7 @@ lazy_static = "1.4.0"
 prost = "0.13.1"
 prost-types = "0.13.1"
 libc = "0.2.155"
+mollusk-svm-keys = "0.0.8"
 solana-address-lookup-table-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 solana-accounts-db = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 solana-bpf-loader-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
@@ -49,6 +50,7 @@ prost-build = "0.13.1"
 
 [patch.crates-io]
 solana-program = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
+solana-sdk = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 solana-zk-token-sdk = { git = "https://github.com/firedancer-io/agave", rev = "66ea0a11f2f77086d33253b4028f6ae7083d78e4" }
 
 [features]

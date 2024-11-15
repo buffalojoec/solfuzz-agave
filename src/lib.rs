@@ -10,6 +10,7 @@ pub mod vm_interp;
 pub mod vm_syscalls;
 pub mod vm_validate;
 
+use mollusk_svm_keys::keys::KeyMap;
 use prost::Message;
 use solana_compute_budget::compute_budget::ComputeBudget;
 use solana_log_collector::LogCollector;
@@ -404,7 +405,10 @@ impl TryFrom<proto::InstrContext> for InstrContext {
 pub fn get_instr_accounts(
     txn_accounts: &[TransactionAccount],
     acct_metas: &StableVec<AccountMeta>,
-) -> Vec<InstructionAccount> {
+) -> Option<Vec<InstructionAccount>> {
+    let mut key_map = KeyMap::default();
+    key_map.add_accounts(acct_metas.iter());
+
     let mut instruction_accounts: Vec<InstructionAccount> = Vec::with_capacity(acct_metas.len());
     for (instruction_account_index, account_meta) in acct_metas.iter().enumerate() {
         let index_in_transaction = txn_accounts
@@ -419,15 +423,32 @@ pub fn get_instr_accounts(
                 instruction_account.index_in_transaction == index_in_transaction
             })
             .unwrap_or(instruction_account_index) as IndexOfAccount;
+
+        let is_signer = {
+            if account_meta.is_signer != key_map.is_signer(&account_meta.pubkey) {
+                // Transaction context for fixture is malformed.
+                return None;
+            }
+            account_meta.is_signer
+        };
+        let is_writable = {
+            if account_meta.is_writable != key_map.is_writable(&account_meta.pubkey) {
+                // Transaction context for fixture is malformed.
+                return None;
+            }
+            account_meta.is_writable
+        };
+
         instruction_accounts.push(InstructionAccount {
             index_in_transaction,
             index_in_caller: index_in_transaction,
             index_in_callee,
-            is_signer: account_meta.is_signer,
-            is_writable: account_meta.is_writable,
+            is_signer,
+            is_writable,
         });
     }
-    instruction_accounts
+
+    Some(instruction_accounts)
 }
 
 pub struct InstrEffects {
@@ -841,7 +862,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let mut timings = ExecuteTimings::default();
 
     let instruction_accounts =
-        get_instr_accounts(&transaction_accounts, &input.instruction.accounts);
+        get_instr_accounts(&transaction_accounts, &input.instruction.accounts)?;
 
     // Precompiles (ed25519, secp256k1)
     // Precompiles are programs that run without the VM and without loading any account.

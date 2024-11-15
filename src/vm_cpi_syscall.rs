@@ -150,7 +150,7 @@ pub fn execute_vm_cpi_syscall(input: SyscallContext) -> Option<SyscallEffects> {
 
     // Setup the instruction context in the invoke context
     let instr = &instr_ctx.instruction;
-    let instr_accounts = crate::get_instr_accounts(&transaction_accounts, &instr.accounts);
+    let instr_accounts = crate::get_instr_accounts(&transaction_accounts, &instr.accounts).unwrap();
 
     let caller_instr_ctx = invoke_context
         .transaction_context
