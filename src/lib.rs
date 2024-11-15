@@ -916,88 +916,95 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
 
     let return_data = transaction_context.get_return_data().1.to_vec();
 
-    Some(InstrEffects {
-        custom_err: if let Err(InstructionError::Custom(code)) = result {
-            #[cfg(feature = "core-bpf")]
-            // See comment below under `result` for special-casing of custom
-            // errors for Core BPF programs.
-            if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
-                None
-            } else if program_id == &solana_sdk::config::program::id() && code == 0 {
-                None
-            } else {
-                Some(code)
-            }
-            #[cfg(not(feature = "core-bpf"))]
-            Some(code)
-        } else {
+    let custom_err = if let Err(InstructionError::Custom(code)) = result {
+        #[cfg(feature = "core-bpf")]
+        // See comment below under `result` for special-casing of custom
+        // errors for Core BPF programs.
+        if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
             None
-        },
-        #[allow(clippy::map_identity)]
-        result: result.err().map(|err| {
-            #[cfg(feature = "core-bpf")]
-            // Some errors don't directly map between builtins and their BPF
-            // versions.
-            //
-            // For example, when a builtin program exceeds the compute budget,
-            // the builtin's `DEFAULT_COMPUTE_UNITS` are deducted from the
-            // meter, and if the meter is exhuasted, the invoke context will
-            // throw `InstructionError::ComputationalBudgetExceeded`.
-            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L73
-            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L574
-            //
-            // However, for a BPF program, if the compute meter is exhausted,
-            // the error comes from the VM, and is converted to
-            // `InstructionError::ProgramFailedToComplete`.
-            // https://github.com/solana-labs/rbpf/blob/69a52ec6a341bb7374d387173b5e6dc56218fe0c/src/error.rs#L44
-            // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L547
-            //
-            // Therefore, some errors require reconciliation when testing a BPF
-            // program against its builtin implementation.
-            if err == InstructionError::ProgramFailedToComplete
-                && (input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS
-                    || compute_units_consumed >= input.cu_avail)
-            {
-                return InstructionError::ComputationalBudgetExceeded;
-            }
-            #[cfg(feature = "core-bpf")]
-            // Another such error case arises when a program performs a write
-            // to an account, but the data it writes is the exact same data
-            // that's currently stored in the account state.
-            //
-            // For builtins, the `TransactionContext` is invoked when any write
-            // is performed, asking it whether or not a write is allowed,
-            // regardless of the data being written. If the account is not
-            // writable, it throws `InstructionError::ReadonlyDataModified`.
-            //
-            // For BPF programs, writes to readonly accounts are caught _after_
-            // the VM finishes execution, when the loader inspects the
-            // serialized input data region. If a write was performed that did
-            // not modify serialized account state, then no error is thrown.
-            //
-            // As a result, Core BPF programs have been outfitted with custom
-            // errors when `is_writable` checks fail. These errors are
-            // special-cased below to avoid fixture mismatches.
-            match err {
-                InstructionError::Custom(code) => {
-                    if program_id == &solana_sdk::address_lookup_table::program::id() {
-                        // Special-cased custom error codes for the ALT program.
-                        if code == 10 {
-                            return InstructionError::ReadonlyDataModified;
-                        }
-                    }
-                    if program_id == &solana_sdk::config::program::id() {
-                        // Special-cased custom error codes for the Config program.
-                        if code == 0 {
-                            return InstructionError::ReadonlyDataModified;
-                        }
+        } else if program_id == &solana_sdk::config::program::id() && code == 0 {
+            None
+        } else {
+            Some(code)
+        }
+        #[cfg(not(feature = "core-bpf"))]
+        Some(code)
+    } else {
+        None
+    };
+
+    #[allow(clippy::map_identity)]
+    let result = result.err().map(|err| {
+        #[cfg(feature = "core-bpf")]
+        // Some errors don't directly map between builtins and their BPF
+        // versions.
+        //
+        // For example, when a builtin program exceeds the compute budget,
+        // the builtin's `DEFAULT_COMPUTE_UNITS` are deducted from the
+        // meter, and if the meter is exhuasted, the invoke context will
+        // throw `InstructionError::ComputationalBudgetExceeded`.
+        // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L73
+        // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L574
+        //
+        // However, for a BPF program, if the compute meter is exhausted,
+        // the error comes from the VM, and is converted to
+        // `InstructionError::ProgramFailedToComplete`.
+        // https://github.com/solana-labs/rbpf/blob/69a52ec6a341bb7374d387173b5e6dc56218fe0c/src/error.rs#L44
+        // https://github.com/anza-xyz/agave/blob/6d74d13749829d463fabccebd8203edf0cf4c500/program-runtime/src/invoke_context.rs#L547
+        //
+        // Therefore, some errors require reconciliation when testing a BPF
+        // program against its builtin implementation.
+        if err == InstructionError::ProgramFailedToComplete
+            && (input.cu_avail <= CORE_BPF_DEFAULT_COMPUTE_UNITS
+                || compute_units_consumed >= input.cu_avail)
+        {
+            return InstructionError::ComputationalBudgetExceeded;
+        }
+        #[cfg(feature = "core-bpf")]
+        // Another such error case arises when a program performs a write
+        // to an account, but the data it writes is the exact same data
+        // that's currently stored in the account state.
+        //
+        // For builtins, the `TransactionContext` is invoked when any write
+        // is performed, asking it whether or not a write is allowed,
+        // regardless of the data being written. If the account is not
+        // writable, it throws `InstructionError::ReadonlyDataModified`.
+        //
+        // For BPF programs, writes to readonly accounts are caught _after_
+        // the VM finishes execution, when the loader inspects the
+        // serialized input data region. If a write was performed that did
+        // not modify serialized account state, then no error is thrown.
+        //
+        // As a result, Core BPF programs have been outfitted with custom
+        // errors when `is_writable` checks fail. These errors are
+        // special-cased below to avoid fixture mismatches.
+        match err {
+            InstructionError::Custom(code) => {
+                if program_id == &solana_sdk::address_lookup_table::program::id() {
+                    // Special-cased custom error codes for the ALT program.
+                    if code == 10 {
+                        return InstructionError::ReadonlyDataModified;
                     }
                 }
-                _ => {}
+                if program_id == &solana_sdk::config::program::id() {
+                    // Special-cased custom error codes for the Config program.
+                    if code == 0 {
+                        return InstructionError::ReadonlyDataModified;
+                    }
+                }
             }
-            err
-        }),
-        modified_accounts: transaction_context
+            _ => {}
+        }
+        err
+    });
+
+    // If the program failed, don't return modified accounts.
+    // For BPF programs, this is none.
+    // For builtins, this is never committed.
+    let modified_accounts = if result.is_some() {
+        vec![]
+    } else {
+        transaction_context
             .deconstruct_without_keys()
             .unwrap()
             .into_iter()
@@ -1023,7 +1030,13 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
                 }
                 (transaction_accounts[index].0, data.into())
             })
-            .collect(),
+            .collect()
+    };
+
+    Some(InstrEffects {
+        custom_err,
+        result,
+        modified_accounts,
         cu_avail,
         return_data,
     })
