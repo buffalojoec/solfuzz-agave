@@ -72,8 +72,20 @@ pub unsafe extern "C" fn sol_compat_vm_cpi_syscall_v1(
 // TODO: unify with other syscall harness after CPI fuzzing is stable
 #[allow(dead_code)]
 pub fn execute_vm_cpi_syscall(input: SyscallContext) -> Option<SyscallEffects> {
-    let instr_ctx: InstrContext = input.instr_ctx?.try_into().ok()?;
+    let mut instr_ctx: InstrContext = input.instr_ctx?.try_into().ok()?;
 
+    let existing_pubkeys: Vec<_> = instr_ctx
+        .accounts
+        .iter()
+        .map(|(pubkey, _)| pubkey)
+        .collect();
+
+    if !existing_pubkeys.contains(&&instr_ctx.instruction.program_id) {
+        instr_ctx.accounts.push((
+            instr_ctx.instruction.program_id,
+            AccountSharedData::default().into(),
+        ));
+    }
     // Create invoke context
     // TODO: factor this into common code with lib.rs
     let mut transaction_accounts =

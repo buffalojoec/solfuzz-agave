@@ -66,7 +66,20 @@ pub unsafe extern "C" fn sol_compat_vm_syscall_execute_v1(
 }
 
 pub fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
-    let instr_ctx: InstrContext = input.instr_ctx?.try_into().ok()?;
+    let mut instr_ctx: InstrContext = input.instr_ctx?.try_into().ok()?;
+
+    let existing_pubkeys: Vec<_> = instr_ctx
+        .accounts
+        .iter()
+        .map(|(pubkey, _)| pubkey)
+        .collect();
+
+    if !existing_pubkeys.contains(&&instr_ctx.instruction.program_id) {
+        instr_ctx.accounts.push((
+            instr_ctx.instruction.program_id,
+            AccountSharedData::default().into(),
+        ));
+    }
 
     let feature_set = instr_ctx.feature_set;
 
@@ -180,8 +193,8 @@ pub fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
 
     let program_idx_in_txn = transaction_accounts
         .iter()
-        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)
-        .unwrap_or(0) as IndexOfAccount;
+        .position(|(pubkey, _)| *pubkey == instr_ctx.instruction.program_id)?
+        as IndexOfAccount;
 
     caller_instr_ctx.configure(
         &[program_idx_in_txn],
@@ -201,8 +214,7 @@ pub fn execute_vm_syscall(input: SyscallContext) -> Option<SyscallEffects> {
             accounts_metadata: vec![], // TODO: accounts metadata for direct mapping support
             trace_log: Vec::new(),
         })
-        .unwrap_or(());
-
+        .unwrap();
     // TODO: support different versions
     let sbpf_version = &SBPFVersion::V1;
 
