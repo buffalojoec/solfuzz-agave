@@ -260,6 +260,7 @@ static SUPPORTED_FEATURES: &[u64] = feature_list![
     move_stake_and_move_lamports_ixs,
     deprecate_legacy_vote_ixs,
     partitioned_epoch_rewards_superfeature,
+    get_sysvar_syscall_enabled,
 ];
 
 // If the `CORE_BPF_PROGRAM_ID` variable is set, declares the default compute
