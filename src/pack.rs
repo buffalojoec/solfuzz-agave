@@ -63,8 +63,12 @@ fn execute_pack_cbp(input: PackComputeBudgetContext) -> Option<PackComputeBudget
                 rewards: fee_budget_limits.prioritization_fee,
                 heap_sz: cbp_limits.updated_heap_bytes,
                 loaded_acct_data_sz: cbp_limits.loaded_accounts_bytes.into(),
+                is_empty: 0,
             })
         }
-        Err(_) => Some(PackComputeBudgetEffects::default()),
+        Err(_) => Some(PackComputeBudgetEffects {
+            is_empty: 1,
+            ..PackComputeBudgetEffects::default()
+        }),
     }
 }
