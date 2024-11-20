@@ -616,6 +616,13 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         }
     }
 
+    if !input
+        .feature_set
+        .is_active(&relax_authority_signer_check_for_lookup_table_creation::id())
+    {
+        return None;
+    }
+
     #[cfg(feature = "core-bpf")]
     // If the fixture declares `cu_avail` to be less than the builtin version's
     // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
