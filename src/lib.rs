@@ -948,7 +948,9 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         #[cfg(feature = "core-bpf")]
         // See comment below under `result` for special-casing of custom
         // errors for Core BPF programs.
-        if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
+        if program_id == &solana_sdk::address_lookup_table::program::id()
+            && (code == 10 || code == 11)
+        {
             None
         } else if program_id == &solana_sdk::config::program::id() && code == 0 {
             None
@@ -1012,6 +1014,9 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
                     // Special-cased custom error codes for the ALT program.
                     if code == 10 {
                         return InstructionError::ReadonlyDataModified;
+                    }
+                    if code == 11 {
+                        return InstructionError::ReadonlyLamportChange;
                     }
                 }
                 if program_id == &solana_sdk::config::program::id() {
