@@ -55,5 +55,9 @@ solana-zk-token-sdk = { git = "https://github.com/firedancer-io/agave", rev = "6
 # This feature is used to compile a target with a builtin replaced by a BPF program.
 # Requires the `CORE_BPF_PROGRAM_ID` and `CORE_BPF_TARGET` environment variables.
 core-bpf = []
+# Use the actual CU meter when testing Core BPF programs.
+core-bpf-cu-meter = []
+# Disable the CU meter.
+disable-cu-meter = []
 # This feature is used to stub out certain parts of the agave runtime for fuzzing
 stub-agave = ["solana-program-runtime/stub-proc-instr"]

@@ -579,7 +579,9 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
-    #[cfg(feature = "core-bpf")]
+    #[cfg(feature = "core-bpf-cu-meter")]
+    let compute_budget = ComputeBudget::default();
+    #[cfg(all(feature = "core-bpf", not(feature = "core-bpf-cu-meter")))]
     // If the fixture declares `cu_avail` to be less than the builtin version's
     // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
     // exhaustion.
@@ -595,7 +597,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         }
         budget
     };
-    #[cfg(not(feature = "core-bpf"))]
+    #[cfg(all(not(feature = "core-bpf"), not(feature = "core-bpf-cu-meter")))]
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
         ..ComputeBudget::default()
@@ -888,21 +890,21 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         &mut timings,
     );
 
-    #[cfg(feature = "core-bpf")]
+    #[cfg(all(feature = "core-bpf", not(feature = "core-bpf-cu-meter")))]
     // To keep alignment with a builtin run, deduct only the CUs the builtin
     // version would have consumed, so the fixture realizes the same CU
     // deduction across both BPF and builtin in its effects.
     let cu_avail = input
         .cu_avail
         .saturating_sub(CORE_BPF_DEFAULT_COMPUTE_UNITS);
-    #[cfg(not(feature = "core-bpf"))]
+    #[cfg(any(not(feature = "core-bpf"), feature = "core-bpf-cu-meter"))]
     let cu_avail = input.cu_avail - compute_units_consumed;
 
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
         custom_err: if let Err(InstructionError::Custom(code)) = result {
-            #[cfg(feature = "core-bpf")]
+            #[cfg(all(feature = "core-bpf", not(feature = "core-bpf-cu-meter")))]
             // See comment below under `result` for special-casing of custom
             // errors for Core BPF programs.
             if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
@@ -912,14 +914,14 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             } else {
                 Some(code)
             }
-            #[cfg(not(feature = "core-bpf"))]
+            #[cfg(any(not(feature = "core-bpf"), feature = "core-bpf-cu-meter"))]
             Some(code)
         } else {
             None
         },
         #[allow(clippy::map_identity)]
         result: result.err().map(|err| {
-            #[cfg(feature = "core-bpf")]
+            #[cfg(all(feature = "core-bpf", not(feature = "core-bpf-cu-meter")))]
             // Some errors don't directly map between builtins and their BPF
             // versions.
             //
@@ -944,7 +946,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             {
                 return InstructionError::ComputationalBudgetExceeded;
             }
-            #[cfg(feature = "core-bpf")]
+            #[cfg(all(feature = "core-bpf", not(feature = "core-bpf-cu-meter")))]
             // Another such error case arises when a program performs a write
             // to an account, but the data it writes is the exact same data
             // that's currently stored in the account state.
