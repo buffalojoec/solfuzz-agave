@@ -50,11 +50,8 @@ use std::ffi::c_int;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[cfg(feature = "core-bpf")]
-use {
-    solana_sdk::account::WritableAccount, solana_sdk::slot_hashes::SlotHashes,
-    solana_sdk::sysvar::Sysvar,
-};
+#[cfg(any(feature = "core-bpf", feature = "core-bpf-conformance"))]
+use solana_sdk::{account::WritableAccount, slot_hashes::SlotHashes, sysvar::Sysvar};
 
 // macro to rewrite &[IDENTIFIER, ...] to &[feature_u64(IDENTIFIER::id()), ...]
 #[macro_export]
@@ -579,7 +576,7 @@ fn load_builtins(cache: &mut ProgramCacheForTxBatch) -> HashSet<Pubkey> {
 }
 
 fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
-    #[cfg(feature = "core-bpf")]
+    #[cfg(feature = "core-bpf-conformance")]
     // If the fixture declares `cu_avail` to be less than the builtin version's
     // `DEFAULT_COMPUTE_UNITS`, the program should fail on compute meter
     // exhaustion.
@@ -595,7 +592,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         }
         budget
     };
-    #[cfg(not(feature = "core-bpf"))]
+    #[cfg(not(feature = "core-bpf-conformance"))]
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
         ..ComputeBudget::default()
@@ -607,7 +604,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     sysvar_cache.fill_missing_entries(|pubkey, callbackback| {
         if let Some(account) = input.accounts.iter().find(|(key, _)| key == pubkey) {
             if account.1.lamports > 0 {
-                #[cfg(feature = "core-bpf")]
+                #[cfg(any(feature = "core-bpf", feature = "core-bpf-conformance"))]
                 // BPF versions of programs, such as Address Lookup Table, rely
                 // on the new `SolGetSysvar` syscall. However, APIs for
                 // querying slot hashes built on top of `SolGetSysvar` are
@@ -679,7 +676,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         .accounts
         .iter()
         .map(|(pubkey, account)| {
-            #[cfg(feature = "core-bpf")]
+            #[cfg(any(feature = "core-bpf", feature = "core-bpf-conformance"))]
             // Fixtures provide the program account as a builtin (owned by
             // native loader), but the program-runtime will expect the account
             // owner to match the cache entry.
@@ -756,7 +753,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
     let mut newly_loaded_programs = HashSet::<Pubkey>::new();
 
     for acc in &input.accounts {
-        #[cfg(feature = "core-bpf")]
+        #[cfg(any(feature = "core-bpf", feature = "core-bpf-conformance"))]
         // The Core BPF program's ELF has already been added to the cache.
         // Its transaction account was stubbed out, so it can't be loaded via
         // callback (inputs), since the account doesn't contain the ELF.
@@ -888,21 +885,21 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
         &mut timings,
     );
 
-    #[cfg(feature = "core-bpf")]
+    #[cfg(feature = "core-bpf-conformance")]
     // To keep alignment with a builtin run, deduct only the CUs the builtin
     // version would have consumed, so the fixture realizes the same CU
     // deduction across both BPF and builtin in its effects.
     let cu_avail = input
         .cu_avail
         .saturating_sub(CORE_BPF_DEFAULT_COMPUTE_UNITS);
-    #[cfg(not(feature = "core-bpf"))]
+    #[cfg(not(feature = "core-bpf-conformance"))]
     let cu_avail = input.cu_avail - compute_units_consumed;
 
     let return_data = transaction_context.get_return_data().1.to_vec();
 
     Some(InstrEffects {
         custom_err: if let Err(InstructionError::Custom(code)) = result {
-            #[cfg(feature = "core-bpf")]
+            #[cfg(feature = "core-bpf-conformance")]
             // See comment below under `result` for special-casing of custom
             // errors for Core BPF programs.
             if program_id == &solana_sdk::address_lookup_table::program::id() && code == 10 {
@@ -912,14 +909,14 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             } else {
                 Some(code)
             }
-            #[cfg(not(feature = "core-bpf"))]
+            #[cfg(not(feature = "core-bpf-conformance"))]
             Some(code)
         } else {
             None
         },
         #[allow(clippy::map_identity)]
         result: result.err().map(|err| {
-            #[cfg(feature = "core-bpf")]
+            #[cfg(feature = "core-bpf-conformance")]
             // Some errors don't directly map between builtins and their BPF
             // versions.
             //
@@ -944,7 +941,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             {
                 return InstructionError::ComputationalBudgetExceeded;
             }
-            #[cfg(feature = "core-bpf")]
+            #[cfg(feature = "core-bpf-conformance")]
             // Another such error case arises when a program performs a write
             // to an account, but the data it writes is the exact same data
             // that's currently stored in the account state.
@@ -987,7 +984,7 @@ fn execute_instr(mut input: InstrContext) -> Option<InstrEffects> {
             .into_iter()
             .enumerate()
             .map(|(index, data)| {
-                #[cfg(feature = "core-bpf")]
+                #[cfg(any(feature = "core-bpf", feature = "core-bpf-conformance"))]
                 // Fixtures provide the program account as a builtin account
                 // (owned by native loader).
                 //

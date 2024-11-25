@@ -106,17 +106,17 @@ pub fn declare_core_bpf_default_compute_units(_: TokenStream) -> TokenStream {
 
         if program_id == solana_sdk::address_lookup_table::program::id() {
             tokens = quote! {
-                #[cfg(feature = "core-bpf")]
+                #[cfg(feature = "core-bpf-conformance")]
                 const CORE_BPF_DEFAULT_COMPUTE_UNITS: u64 = solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS;
             }
         } else if program_id == solana_sdk::config::program::id() {
             tokens = quote! {
-                #[cfg(feature = "core-bpf")]
+                #[cfg(feature = "core-bpf-conformance")]
                 const CORE_BPF_DEFAULT_COMPUTE_UNITS: u64 = solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS;
             }
         } else if program_id == solana_sdk::stake::program::id() {
             tokens = quote! {
-                #[cfg(feature = "core-bpf")]
+                #[cfg(feature = "core-bpf-conformance")]
                 const CORE_BPF_DEFAULT_COMPUTE_UNITS: u64 = solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS;
             }
         }
