@@ -18,12 +18,16 @@ set_core_bpf_vars() {
             CORE_BPF_PROGRAM_ID="Config1111111111111111111111111111111111111"
             CORE_BPF_TARGET="$BPF_PROGRAMS_DIR/lib/solana_config_program.so"
             ;;
+        feature-gate)
+            CORE_BPF_PROGRAM_ID="Feature111111111111111111111111111111111111"
+            CORE_BPF_TARGET="$BPF_PROGRAMS_DIR/lib/solana_feature_gate_program.so"
+            ;;
         stake)
             CORE_BPF_PROGRAM_ID="Stake11111111111111111111111111111111111111"
             CORE_BPF_TARGET="$BPF_PROGRAMS_DIR/lib/solana_stake_program.so"
             ;;
         *)
-            echo "Invalid argument. Use 'address-lookup-table', 'config', or 'stake'."
+            echo "Invalid argument. Use 'address-lookup-table', 'config', 'feature-gate', or 'stake'."
             exit 1
             ;;
     esac
