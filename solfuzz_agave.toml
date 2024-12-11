@@ -1,0 +1,24 @@
+[package]
+name = "solfuzz-agave"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.2", features = ["derive"] }
+solfuzz-agave-macro = { path = "macro" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[build-dependencies]
+prost-build = "0.13.1"
+
+[features]
+# This feature is used to compile a target with a builtin replaced by a BPF program.
+# Requires the `CORE_BPF_PROGRAM_ID` and `CORE_BPF_TARGET` environment variables.
+core-bpf = []
+# Same as the `core-bpf` feature, but also includes special-casing required for
+# conformance testing a BPF program against a builtin.
+core-bpf-conformance = []
+# This feature is used to stub out certain parts of the agave runtime for fuzzing
+stub-agave = ["solana-program-runtime/stub-proc-instr"]
