@@ -1,58 +1,468 @@
-# Useful for testing patches/changes to agave before pushing to 
-# https://github.com/firedancer-io/agave/tree/agave-v2.1.3-patches
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+split-debuginfo = "packed"
 
-# To use this manifest, have agave cloned to `../agave` and rename this to Cargo.toml
-# Do NOT commit the renamed file to the repository. Revert original Cargo.toml before committing.
-# Save any changes to this file in `Cargo_local.toml.bak` for future reference.
+[patch.crates-io]
+# for details, see https://github.com/anza-xyz/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
+crossbeam-epoch = { git = "https://github.com/anza-xyz/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
+
+# We include the following crates as our dependencies above from crates.io:
+#
+#  * spl-associated-token-account
+#  * spl-instruction-padding
+#  * spl-memo
+#  * spl-pod
+#  * spl-token
+#  * spl-token-2022
+#  * spl-token-metadata-interface
+#
+# They, in turn, depend on a number of crates that we also include directly
+# using `path` specifications.  For example, `spl-token` depends on
+# `solana-program`.  And we explicitly specify `solana-program` above as a local
+# path dependency:
+#
+#     solana-program = { path = "../../sdk/program", version = "=1.16.0" }
+#
+# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program`
+# dependency only using what is available on crates.io.  Crates.io normally
+# contains a previous version of these crates, and we end up with two versions
+# of `solana-program` and `solana-zk-token-sdk` and all of their dependencies in
+# our build tree.
+#
+# If you are developing downstream using non-crates-io solana-program (local or
+# forked repo, or from github rev, eg), duplicate the following patch statements
+# in your Cargo.toml. If you still hit duplicate-type errors with the patch
+# statements in place, run `cargo update -p solana-program` and/or `cargo update
+# -p solana-zk-token-sdk` to remove extraneous versions from your Cargo.lock
+# file.
+#
+# There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both
+# comments and the overrides in sync.
+solana-curve25519 = {path = "../agave/curves/curve25519"}
+solana-program = {path = "../agave/sdk/program"}
+solana-zk-sdk = {path = "../agave/zk-sdk"}
+solana-zk-token-sdk = {path = "../agave/zk-token-sdk"}
+
+# curve25519-dalek uses the simd backend by default in v4 if possible,
+# which has very slow performance on some platforms with opt-level 0,
+# which is the default for dev and test builds.
+# This slowdown causes certain interactions in the solana-test-validator,
+# such as verifying ZK proofs in transactions, to take much more than 400ms,
+# creating problems in the testing environment.
+# To enable better performance in solana-test-validator during tests and dev builds,
+# we override the opt-level to 3 for the crate.
+[profile.dev.package.curve25519-dalek]
+opt-level = 3
+
+# Solana RPC nodes experience stalls when running with `tokio` containing this
+# commit:
+# https://github.com/tokio-rs/tokio/commit/4eed411519783ef6f58cbf74f886f91142b5cfa6
+#
+# Tokio maintainers believe performance degradation is due to application bugs:
+# https://github.com/tokio-rs/tokio/issues/4873#issuecomment-1198277677
+#
+# This may indeed be true of the code in this monorepo, but we haven't yet
+# identified the bug or a way to fix. As a stopgap, this patches `tokio` to the
+# tagged version specified above with commit `4eed411` reverted.
+#
+# Comparison:
+# https://github.com/tokio-rs/tokio/compare/tokio-1.29.1...solana-labs:solana-tokio:tokio-1.29.1-revert-4eed411
+#
+[patch.crates-io.tokio]
+git = "https://github.com/anza-xyz/solana-tokio.git"
+rev = "7cf47705faacf7bf0e43e4131a5377b3291fce21"
 
 [package]
 name = "solfuzz-agave"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+    'cfg(feature, values("frozen-abi", "no-entrypoint"))',
+]
+
 
 [dependencies]
+Inflector = "0.11.4"
+agave-transaction-view = {path = "../agave/transaction-view"}
+aquamarine = "0.3.3"
+aes-gcm-siv = "0.11.1"
+ahash = "0.8.11"
+anyhow = "1.0.91"
+arbitrary = "1.3.2"
+ark-bn254 = "0.4.0"
+ark-ec = "0.4.0"
+ark-ff = "0.4.0"
+ark-serialize = "0.4.0"
+array-bytes = "=1.4.1"
+arrayref = "0.3.9"
+arrayvec = "0.7.6"
+assert_cmd = "2.0"
+assert_matches = "1.5.0"
+async-channel = "1.9.0"
+async-lock = "3.4.0"
+async-trait = "0.1.83"
+atty = "0.2.11"
+backoff = "0.4.0"
+base64 = "0.22.1"
 bincode = "1.3.3"
+bitflags = { version = "2.6.0" }
+blake3 = "1.5.4"
+borsh = { version = "1.5.1", features = ["derive", "unstable__schema"] }
+borsh0-10 = { package = "borsh", version = "0.10.3" }
+bs58 = { version = "0.5.1", default-features = false }
+bv = "0.11.1"
+byte-unit = "4.0.19"
+bytecount = "0.6.8"
+bytemuck = "1.19.0"
+bytemuck_derive = "1.8.0"
+byteorder = "1.5.0"
+bytes = "1.8"
+bzip2 = "0.4.4"
+caps = "0.5.5"
+cargo_metadata = "0.15.4"
+cfg_eval = "0.1.2"
+chrono = { version = "0.4.38", default-features = false }
+chrono-humanize = "0.2.3"
 clap = { version = "4.5.2", features = ["derive"] }
-lazy_static = "1.4.0"
-prost = "0.13.1"
-prost-types = "0.13.1"
-libc = "0.2.155"
-solana-address-lookup-table-program = { path = "../agave/programs/address-lookup-table" }
-solana-accounts-db = { path = "../agave/accounts-db" }
-solana-bpf-loader-program = { path = "../agave/programs/bpf_loader" }
-solana-compute-budget = { path = "../agave/compute-budget" }
-solana-compute-budget-program = { path = "../agave/programs/compute-budget" }
-solana-config-program = { path = "../agave/programs/config" }
-solana-ledger = { path = "../agave/ledger" }
-solana-loader-v4-program = { path = "../agave/programs/loader-v4" }
-solana-log-collector = { path = "../agave/log-collector" }
-solana-program = { path = "../agave/sdk/program" }
-solana-program-runtime = { path = "../agave/program-runtime" }
-solana-runtime = { path = "../agave/runtime", features = ["dev-context-only-utils"] }
-solana-stake-program = { path = "../agave/programs/stake" }
-solana-system-program = { path = "../agave/programs/system" }
-solana-svm = { path = "../agave/svm" }
-solana-svm-transaction = { path = "../agave/svm-transaction" }
-solana-sdk = { path = "../agave/sdk" }
-solana-timings = { path = "../agave/timings" }
-solana-vote-program = { path = "../agave/programs/vote" }
-solana-zk-sdk = { path = "../agave/zk-sdk" }
-solana-zk-elgamal-proof-program = { path = "../agave/programs/zk-elgamal-proof" }
-solana-poseidon = { path = "../agave/poseidon" }
-solana-runtime-transaction = { path = "../agave/runtime-transaction" }
-solfuzz-agave-macro = { path = "macro" }
+console = "0.15.8"
+console_error_panic_hook = "0.1.7"
+console_log = "0.2.2"
+const_format = "0.2.33"
+core_affinity = "0.5.10"
+criterion = "0.5.1"
+criterion-stats = "0.3.0"
+crossbeam-channel = "0.5.13"
+csv = "1.3.0"
+ctrlc = "3.4.5"
+curve25519-dalek = { version = "4.1.3", features = ["digest", "rand_core"] }
+dashmap = "5.5.3"
+derivation-path = { version = "0.2.0", default-features = false }
+derivative = "2.2.0"
+dialoguer = "0.10.4"
+digest = "0.10.7"
+dir-diff = "0.3.3"
+dirs-next = "2.0.0"
+dlopen2 = "0.5.0"
+eager = "0.1.0"
+ed25519-dalek = "=1.0.1"
+ed25519-dalek-bip32 = "0.2.0"
+enum-iterator = "1.5.0"
+env_logger = "0.9.3"
+etcd-client = "0.11.1"
+fast-math = "0.1"
+fd-lock = "3.0.13"
+flate2 = "1.0.31"
+five8_const = "0.1.3"
+fnv = "1.0.7"
+fs_extra = "1.3.0"
+futures = "0.3.31"
+futures-util = "0.3.29"
+gag = "1.0.0"
+generic-array = { version = "0.14.7", default-features = false }
+gethostname = "0.2.3"
+getrandom = "0.2.10"
+goauth = "0.13.1"
+governor = "0.6.3"
+hex = "0.4.3"
+hidapi = { version = "2.6.3", default-features = false }
+histogram = "0.6.9"
+hmac = "0.12.1"
+http = "0.2.12"
+humantime = "2.0.1"
+hyper = "0.14.31"
+hyper-proxy = "0.9.1"
+im = "15.1.0"
+index_list = "0.2.13"
+indexmap = "2.6.0"
+indicatif = "0.17.8"
+itertools = "0.12.1"
+jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = [
+    "unprefixed_malloc_on_supported_platforms",
+] }
+js-sys = "0.3.72"
+json5 = "0.4.1"
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+jsonrpc-ipc-server = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+lazy-lru = "0.1.3"
+lazy_static = "1.5.0"
+libc = "0.2.161"
+libloading = "0.7.4"
+libsecp256k1 = { version = "0.6.0", default-features = false, features = [
+    "std",
+    "static-context",
+] }
+light-poseidon = "0.2.0"
+log = "0.4.22"
+lru = "0.7.7"
+lz4 = "1.28.0"
+memmap2 = "0.5.10"
+memoffset = "0.9"
+merlin = "3"
+min-max-heap = "1.3.0"
+mockall = "0.11.4"
+modular-bitfield = "0.11.2"
+nix = "0.29.0"
+num-bigint = "0.4.6"
+num-derive = "0.4"
+num-traits = "0.2"
+num_cpus = "1.16.0"
+num_enum = "0.7.3"
+openssl = "0.10"
+parking_lot = "0.12"
+pbkdf2 = { version = "0.11.0", default-features = false }
+pem = "1.1.1"
+percentage = "0.1.0"
+predicates = "2.1"
+pretty-hex = "0.3.0"
+prio-graph = "0.3.0"
+proc-macro2 = "1.0.89"
+proptest = "1.5"
+prost = "0.11.9"
+prost-build = "0.11.9"
+prost-types = "0.11.9"
+protobuf-src = "1.1.0"
+qstring = "0.7.2"
+qualifier_attr = { version = "0.2.2", default-features = false }
+quinn = "0.11.6"
+quinn-proto = "0.11.9"
+quote = "1.0"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+rayon = "1.10.0"
+reed-solomon-erasure = "6.0.0"
+regex = "1.11.1"
+reqwest = { version = "0.11.27", default-features = false }
+reqwest-middleware = "0.2.5"
+rolling-file = "0.2.0"
+rpassword = "7.3"
+rustls = { version = "0.23.15", default-features = false }
+scopeguard = "1.2.0"
+semver = "1.0.23"
+seqlock = "0.2.0"
+serde = "1.0.213" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
+serde_bytes = "0.11.15"
+serde_derive = "1.0.213" # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
+serde_json = "1.0.132"
+serde_with = { version = "3.11.0", default-features = false }
+serde_yaml = "0.9.34"
+serial_test = "2.0.0"
+sha2 = "0.10.8"
+sha3 = "0.10.8"
+shuttle = "0.7.1"
+signal-hook = "0.3.17"
+siphasher = "0.3.11"
+smallvec = "1.13.2"
+smpl_jwt = "0.7.1"
+socket2 = "0.5.7"
+soketto = "0.7"
+solana-account = {path = "../agave/sdk/account"}
+solana-account-decoder = {path = "../agave/account-decoder"}
+solana-account-decoder-client-types = {path = "../agave/account-decoder-client-types"}
+solana-account-info = {path = "../agave/sdk/account-info"}
+solana-accounts-db = {path = "../agave/accounts-db"}
+solana-address-lookup-table-program = {path = "../agave/programs/address-lookup-table"}
+solana-atomic-u64 = {path = "../agave/sdk/atomic-u64"}
+solana-banks-client = {path = "../agave/banks-client"}
+solana-banks-interface = {path = "../agave/banks-interface"}
+solana-banks-server = {path = "../agave/banks-server"}
+solana-bench-tps = {path = "../agave/bench-tps"}
+solana-bincode = {path = "../agave/sdk/bincode"}
+solana-bloom = {path = "../agave/bloom"}
+solana-bn254 = {path = "../agave/curves/bn254"}
+solana-borsh = {path = "../agave/sdk/borsh"}
+solana-bpf-loader-program = {path = "../agave/programs/bpf_loader"}
+solana-bucket-map = {path = "../agave/bucket_map"}
+solana-builtins-default-costs = {path = "../agave/builtins-default-costs"}
+agave-cargo-registry = {path = "../agave/cargo-registry"}
+solana-clap-utils = {path = "../agave/clap-utils"}
+solana-clap-v3-utils = {path = "../agave/clap-v3-utils"}
+solana-cli = {path = "../agave/cli"}
+solana-cli-config = {path = "../agave/cli-config"}
+solana-cli-output = {path = "../agave/cli-output"}
+solana-client = {path = "../agave/client"}
+solana-clock = {path = "../agave/sdk/clock"}
+solana-compute-budget = {path = "../agave/compute-budget"}
+solana-compute-budget-program = {path = "../agave/programs/compute-budget"}
+solana-config-program = {path = "../agave/programs/config"}
+solana-connection-cache = {path = "../agave/connection-cache"}
+solana-core = {path = "../agave/core"}
+solana-cost-model = {path = "../agave/cost-model"}
+solana-cpi = {path = "../agave/sdk/cpi"}
+solana-curve25519 = {path = "../agave/curves/curve25519"}
+solana-decode-error = {path = "../agave/sdk/decode-error"}
+solana-define-syscall = {path = "../agave/define-syscall"}
+solana-derivation-path = {path = "../agave/sdk/derivation-path"}
+solana-download-utils = {path = "../agave/download-utils"}
+solana-entry = {path = "../agave/entry"}
+solana-program-entrypoint = {path = "../agave/sdk/program-entrypoint"}
+solana-epoch-schedule = {path = "../agave/sdk/epoch-schedule"}
+solana-faucet = {path = "../agave/faucet"}
+solana-feature-set = {path = "../agave/sdk/feature-set"}
+solana-fee-calculator = {path = "../agave/sdk/fee-calculator"}
+solana-fee = {path = "../agave/fee"}
+solana-frozen-abi = {path = "../agave/frozen-abi"}
+solana-frozen-abi-macro = {path = "../agave/frozen-abi/macro"}
+solana-tps-client = {path = "../agave/tps-client"}
+solana-genesis = {path = "../agave/genesis"}
+solana-genesis-utils = {path = "../agave/genesis-utils"}
+agave-geyser-plugin-interface = {path = "../agave/geyser-plugin-interface"}
+solana-geyser-plugin-manager = {path = "../agave/geyser-plugin-manager"}
+solana-gossip = {path = "../agave/gossip"}
+solana-hash = {path = "../agave/sdk/hash"}
+solana-inflation = {path = "../agave/sdk/inflation"}
+solana-inline-spl = {path = "../agave/inline-spl"}
+solana-instruction = {path = "../agave/sdk/instruction"}
+solana-last-restart-slot = {path = "../agave/sdk/last-restart-slot"}
+solana-lattice-hash = {path = "../agave/lattice-hash"}
+solana-ledger = {path = "../agave/ledger"}
+solana-loader-v4-program = {path = "../agave/programs/loader-v4"}
+solana-local-cluster = {path = "../agave/local-cluster"}
+solana-log-collector = {path = "../agave/log-collector"}
+solana-logger = {path = "../agave/logger"}
+solana-measure = {path = "../agave/measure"}
+solana-merkle-tree = {path = "../agave/merkle-tree"}
+solana-metrics = {path = "../agave/metrics"}
+solana-msg = {path = "../agave/sdk/msg"}
+solana-native-token = {path = "../agave/sdk/native-token"}
+solana-net-utils = {path = "../agave/net-utils"}
+solana-nohash-hasher = "0.2.1"
+solana-notifier = {path = "../agave/notifier"}
+solana-package-metadata = {path = "../agave/sdk/package-metadata"}
+solana-package-metadata-macro = {path = "../agave/sdk/package-metadata-macro"}
+solana-packet = {path = "../agave/sdk/packet"}
+solana-perf = {path = "../agave/perf"}
+solana-poh = {path = "../agave/poh"}
+solana-poseidon = {path = "../agave/poseidon"}
+solana-precompile-error = {path = "../agave/sdk/precompile-error"}
+solana-program = {path = "../agave/sdk/program"}
+solana-program-error = {path = "../agave/sdk/program-error"}
+solana-program-memory = {path = "../agave/sdk/program-memory"}
+solana-program-option = {path = "../agave/sdk/program-option"}
+solana-program-pack = {path = "../agave/sdk/program-pack"}
+solana-program-runtime = {path = "../agave/program-runtime"}
+solana-program-test = {path = "../agave/program-test"}
+solana-pubkey = {path = "../agave/sdk/pubkey"}
+solana-pubsub-client = {path = "../agave/pubsub-client"}
+solana-quic-client = {path = "../agave/quic-client"}
+solana-rayon-threadlimit = {path = "../agave/rayon-threadlimit"}
+solana-remote-wallet = {path = "../agave/remote-wallet"}
+solana-rent = {path = "../agave/sdk/rent"}
+solana-sanitize = {path = "../agave/sdk/sanitize"}
+solana-secp256r1-program = {path = "../agave/sdk/secp256r1-program"}
+solana-serde-varint = {path = "../agave/sdk/serde-varint"}
+solana-serialize-utils = {path = "../agave/sdk/serialize-utils"}
+solana-sha256-hasher = {path = "../agave/sdk/sha256-hasher"}
+solana-signature = {path = "../agave/sdk/signature"}
+solana-slot-hashes = {path = "../agave/sdk/slot-hashes"}
+solana-slot-history = {path = "../agave/sdk/slot-history"}
+solana-timings = {path = "../agave/timings"}
+solana-unified-scheduler-logic = {path = "../agave/unified-scheduler-logic"}
+solana-unified-scheduler-pool = {path = "../agave/unified-scheduler-pool"}
+solana-rpc = {path = "../agave/rpc"}
+solana-rpc-client = {path = "../agave/rpc-client"}
+solana-rpc-client-api = {path = "../agave/rpc-client-api"}
+solana-rpc-client-nonce-utils = {path = "../agave/rpc-client-nonce-utils"}
+solana-runtime = {path = "../agave/runtime"}
+solana-runtime-transaction = {path = "../agave/runtime-transaction"}
+solana-sdk = {path = "../agave/sdk"}
+solana-sdk-macro = {path = "../agave/sdk/macro"}
+solana-secp256k1-recover = {path = "../agave/curves/secp256k1-recover"}
+solana-send-transaction-service = {path = "../agave/send-transaction-service"}
+solana-short-vec = {path = "../agave/short-vec"}
+solana-stable-layout = {path = "../agave/sdk/stable-layout"}
+solana-stake-program = {path = "../agave/programs/stake"}
+solana-storage-bigtable = {path = "../agave/storage-bigtable"}
+solana-storage-proto = {path = "../agave/storage-proto"}
+solana-streamer = {path = "../agave/streamer"}
+solana-svm = {path = "../agave/svm"}
+solana-svm-conformance = {path = "../agave/svm-conformance"}
+solana-svm-example-paytube = {path = "../agave/svm/examples/paytube"}
+solana-svm-rent-collector = {path = "../agave/svm-rent-collector"}
+solana-svm-transaction = {path = "../agave/svm-transaction"}
+solana-system-program = {path = "../agave/programs/system"}
+solana-sysvar-id = {path = "../agave/sdk/sysvar-id"}
+solana-test-validator = {path = "../agave/test-validator"}
+solana-thin-client = {path = "../agave/thin-client"}
+solana-transaction-error = {path = "../agave/sdk/transaction-error"}
+solana-tpu-client = {path = "../agave/tpu-client"}
+solana-transaction-status = {path = "../agave/transaction-status"}
+solana-transaction-status-client-types = {path = "../agave/transaction-status-client-types"}
+solana-transaction-metrics-tracker = {path = "../agave/transaction-metrics-tracker"}
+solana-turbine = {path = "../agave/turbine"}
+solana-type-overrides = {path = "../agave/type-overrides"}
+solana-udp-client = {path = "../agave/udp-client"}
+solana-version = {path = "../agave/version"}
+solana-vote = {path = "../agave/vote"}
+solana-vote-program = {path = "../agave/programs/vote"}
+solana-wen-restart = {path = "../agave/wen-restart"}
+solana-zk-elgamal-proof-program = {path = "../agave/programs/zk-elgamal-proof"}
+solana-zk-keygen = {path = "../agave/zk-keygen"}
+solana-zk-sdk = {path = "../agave/zk-sdk"}
+solana-zk-token-proof-program = {path = "../agave/programs/zk-token-proof"}
+solana-zk-token-sdk = {path = "../agave/zk-token-sdk"}
+solana_rbpf = { git = "https://github.com/solana-labs/rbpf", rev = "410a627" }
+spl-associated-token-account = "=4.0.0"
+spl-instruction-padding = "0.2"
+spl-memo = "=5.0.0"
+spl-pod = "=0.3.0"
+spl-token = "=6.0.0"
+spl-token-2022 = "=4.0.0"
+spl-token-group-interface = "=0.3.0"
+spl-token-metadata-interface = "=0.4.0"
+static_assertions = "1.1.0"
+stream-cancel = "0.8.2"
+strum = "0.24"
+strum_macros = "0.24"
+subtle = "2.6.1"
+symlink = "0.1.0"
+syn = "2.0"
+sys-info = "0.9.1"
+sysctl = "0.4.6"
+systemstat = "0.2.3"
+tar = "0.4.42"
+tarpc = "0.29.0"
+tempfile = "3.13.0"
+test-case = "3.3.1"
 thiserror = "1.0.65"
+tiny-bip39 = "0.8.2"
+# Update solana-tokio patch below when updating this version
+tokio = "1.29.1"
+tokio-serde = "0.8"
+tokio-stream = "0.1.16"
+tokio-tungstenite = "0.20.1"
+tokio-util = "0.7"
+toml = "0.8.12"
+tonic = "0.9.2"
+tonic-build = "0.9.2"
+trees = "0.4.2"
+tungstenite = "0.20.1"
+uriparse = "0.6.4"
+url = "2.5.2"
+vec_extract_if_polyfill = "0.1.0"
+wasm-bindgen = "0.2"
+winapi = "0.3.8"
+x509-parser = "0.14.0"
+# See "zeroize versioning issues" below if you are updating this version.
+zeroize = { version = "1.7", default-features = false }
+zstd = "0.13.2"
+solfuzz-agave-macro = { path = "macro" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 prost-build = "0.13.1"
 
-
-[patch.crates-io]
-solana-program = { path = "../agave/sdk/program" }
-solana-zk-token-sdk = { path = "../agave/zk-token-sdk" }
-
 [features]
+core-bpf = []
+core-bpf-conformance = []
 stub-agave = ["solana-program-runtime/stub-proc-instr"]
