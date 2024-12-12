@@ -12,7 +12,7 @@ on:
 jobs:
   test:
     name: cargo check + test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.76.0
@@ -22,8 +22,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get install protobuf-compiler
-          sudo apt-get install libudev-dev
+          sudo dnf install protobuf-compiler
+          sudo dnf install systemd-devel
 
       - name: Clone protosol
         run: make fetch_proto
@@ -35,25 +35,12 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --all -- -D warnings 
 
-      - name: Test
-        run: |
-          cargo check --release
-          cargo test --release
-          cargo clean
-
       - name: Run binaries build
-        run: make -j binaries
+        run: make -j test binaries shared_obj
 
       - name: Run test-vectors
         run: |
           ./scripts/run_test_vectors.sh
-          rm -rf dump/
-      
-      - name: Clean up binaries
-        run: make clean
-      
-      - name: Run shared obj build
-        run: make -j shared_obj
 
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.upload_artifacts }}
