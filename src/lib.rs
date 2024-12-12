@@ -8,7 +8,6 @@ pub mod utils;
 pub mod vm_cpi_syscall;
 pub mod vm_interp;
 pub mod vm_syscalls;
-pub mod vm_validate;
 
 use prost::Message;
 use solana_compute_budget::compute_budget::ComputeBudget;

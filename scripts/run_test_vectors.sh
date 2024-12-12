@@ -33,7 +33,6 @@ find dump/test-vectors/syscall/fixtures -type f -name '*.fix' -exec ./target/rel
 find dump/test-vectors/vm_interp/fixtures/latest -type f -name '*.fix' -exec ./target/release/test_exec_vm_interp {} + > $LOG_PATH/test_exec_vm_interp.log 2>&1
 find dump/test-vectors/vm_interp/fixtures/v0 -type f -name '*.fix' -exec ./target/release/test_exec_vm_interp {} + > $LOG_PATH/test_exec_vm_interp.log 2>&1
 find dump/test-vectors/elf_loader/fixtures -type f -name '*.fix' -exec ./target/release/test_exec_elf_loader {} + > $LOG_PATH/test_exec_elf_loader.log 2>&1
-find dump/test-vectors/vm_validate/fixtures -type f -name '*.fix' -exec ./target/release/test_exec_vm_validate {} + > $LOG_PATH/test_exec_vm_validate.log 2>&1
 
 failed=`grep -wR FAIL $LOG_PATH | wc -l`
 passed=`grep -wR OK $LOG_PATH | wc -l`
