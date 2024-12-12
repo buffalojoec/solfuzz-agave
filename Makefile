@@ -52,5 +52,9 @@ binaries:
 tests/self_test: tests/self_test.c
 	$(CC) -o $@ $< -Werror=all -pedantic -ldl -fsanitize=address,fuzzer-no-link -fsanitize-coverage=inline-8bit-counters
 
+test:
+	$(CARGO) check --release
+	$(CARGO) test --release
+
 clean:
 	$(CARGO) clean
