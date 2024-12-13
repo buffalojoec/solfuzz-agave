@@ -15,7 +15,9 @@ jobs:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.76.0
+      - uses: dtolnay/rust-toolchain@1.80.1
+        with:
+          components: "clippy, rustfmt"
       - uses: Swatinem/rust-cache@v2
         with: 
           cache-all-crates: true # we do this because we have a crapload of crates used for testing/CI
@@ -30,13 +32,19 @@ jobs:
 
       - name: Check lints and clippy
         run: |
-          rustup component add rustfmt
-          rustup component add clippy
           cargo fmt --all -- --check
           cargo clippy --all -- -D warnings 
 
-      - name: Run binaries build
-        run: make -j test binaries shared_obj
+      - name: Run cargo check + test
+        run: |
+          cargo check --release
+          cargo test --release
+
+      - name: Build shared objects
+        run: make shared_obj
+
+      - name: Make binaries
+        run: make binaries 
 
       - name: Run test-vectors
         run: |
