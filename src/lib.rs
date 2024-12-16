@@ -230,7 +230,7 @@ static SUPPORTED_FEATURES: &[u64] = feature_list![
     enable_poseidon_syscall,
     timely_vote_credits,
     remaining_compute_units_syscall_enabled,
-    // enable_program_runtime_v2_and_loader_v4,
+    enable_program_runtime_v2_and_loader_v4,
     better_error_codes_for_tx_lamport_check,
     enable_alt_bn128_compression_syscall,
     update_hashes_per_tick2,
@@ -260,8 +260,13 @@ static SUPPORTED_FEATURES: &[u64] = feature_list![
     move_stake_and_move_lamports_ixs,
     deprecate_legacy_vote_ixs,
     partitioned_epoch_rewards_superfeature,
+    enable_secp256r1_precompile,
     get_sysvar_syscall_enabled,
     migrate_feature_gate_program_to_core_bpf,
+    migrate_config_program_to_core_bpf,
+    migrate_address_lookup_table_program_to_core_bpf,
+    enable_get_epoch_stake_syscall,
+    disable_account_loader_special_case,
 ];
 
 // If the `CORE_BPF_PROGRAM_ID` variable is set, declares the default compute
