@@ -11,6 +11,12 @@ Supported APIs:
 
 ## How to Use
 
+Install dependencies:
+```sh
+apt install libudev-dev protobuf-compiler pkg-config
+```
+
+
 Check and test:
 
 ```sh
